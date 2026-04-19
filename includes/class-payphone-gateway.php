@@ -48,9 +48,9 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 		// Hook: enqueue frontend scripts only on checkout.
 		add_action( 'wp_enqueue_scripts', array( $this, 'payment_scripts' ) );
 
-		// Hook: output the ES-module shim that exposes PPaymentButtonBox as a
-		// global so our classic checkout.js can access it via window.
-		add_action( 'wp_head', array( $this, 'output_payphone_module_script' ), 5 );
+		// Add type="module" to our checkout script so it can use a static
+		// import of PPaymentButtonBox directly from the Payphone CDN.
+		add_filter( 'script_loader_tag', array( $this, 'add_module_type_to_script' ), 10, 2 );
 
 		// WC API endpoint: Payphone redirects the browser here after payment.
 		// URL: {home}/wc-api/payphone_cajita/  – configure this in Payphone dashboard.
@@ -159,29 +159,19 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 	// -----------------------------------------------------------------------
 
 	/**
-	 * Output a tiny ES-module script in <head> that imports PPaymentButtonBox
-	 * from the Payphone CDN and assigns it to window.PPaymentButtonBox.
+	 * Add type="module" to the payphone checkout script tag so it can use
+	 * a static ES-module import of PPaymentButtonBox directly from the CDN,
+	 * matching exactly the pattern used in the working test.html.
 	 *
-	 * ES module exports are scoped to the module and never reach the global
-	 * scope automatically. By assigning it here (inside a real type="module"
-	 * script that the browser handles natively) we make PPaymentButtonBox
-	 * accessible to our classic payphone-checkout.js, which polls for it.
-	 *
-	 * This approach mirrors the pattern used in the working test.html and avoids
-	 * the pitfalls of dynamic import() inside a classic (non-module) script.
+	 * @param string $tag    Full <script> tag HTML.
+	 * @param string $handle Script handle registered with wp_enqueue_script.
+	 * @return string
 	 */
-	public function output_payphone_module_script() {
-		if ( ! is_checkout() || 'no' === $this->enabled ) {
-			return;
+	public function add_module_type_to_script( $tag, $handle ) {
+		if ( 'payphone-checkout-js' === $handle ) {
+			return str_replace( ' src=', ' type="module" src=', $tag );
 		}
-
-		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript
-		echo '<script type="module">'
-			. 'import*as M from"https://cdn.payphonetodoesposible.com/box/v1.1/payphone-payment-box.js";'
-			. 'var C=M.PPaymentButtonBox||M["default"];'
-			. 'if(typeof C==="function"){window.PPaymentButtonBox=C;}'
-			. 'window.__payphoneSdkLoaded=true;'
-			. '</script>' . "\n";
+		return $tag;
 	}
 
 	/**

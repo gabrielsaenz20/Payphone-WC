@@ -1,7 +1,7 @@
 /**
- * Payphone WC – Checkout integration script
+ * Payphone WC – Checkout integration script (ES module)
  *
- * New inline flow:
+ * Inline flow:
  *  1. Customer selects Payphone from the WC payment method list.
  *  2. JS immediately fetches cart-based payment data (AJAX – no WC order yet).
  *  3. PPaymentButtonBox is rendered inside #pp-button (within payment_fields).
@@ -13,10 +13,20 @@
  *     confirms with Payphone API, marks the order as paid, and returns the
  *     order-received URL.
  *
+ * This file is loaded with type="module" (via script_loader_tag filter) so the
+ * static import resolves exactly as in test.html – no polling or window bridge
+ * needed.
+ *
  * Fallback (hash-change) flow is preserved for block checkout / JS failures.
  */
 
-/* global jQuery, payphoneParams, PPaymentButtonBox */
+/* global jQuery, payphoneParams */
+
+import * as _PayphoneSDK from 'https://cdn.payphonetodoesposible.com/box/v1.1/payphone-payment-box.js';
+
+// Resolve the constructor regardless of whether the module uses a named export
+// (export class PPaymentButtonBox) or a default export (export default class).
+var PPaymentButtonBox = _PayphoneSDK.PPaymentButtonBox || _PayphoneSDK['default'];
 
 (function ($) {
 	'use strict';
@@ -67,6 +77,11 @@
 			return;
 		}
 
+		if ( typeof PPaymentButtonBox !== 'function' ) {
+			showBoxError( payphoneParams.errorText );
+			return;
+		}
+
 		showLoading();
 
 		$.ajax({
@@ -78,7 +93,7 @@
 			},
 			success: function (response) {
 				if ( response.success && response.data ) {
-					waitForConstructor(response.data);
+					renderBox( response.data );
 				} else {
 					showBoxError(
 						( response.data && response.data.message )
@@ -88,36 +103,9 @@
 				}
 			},
 			error: function () {
-				showBoxError(payphoneParams.errorText);
+				showBoxError( payphoneParams.errorText );
 			},
 		});
-	}
-
-	/**
-	 * Wait for PPaymentButtonBox to be available on the global scope.
-	 *
-	 * A tiny <script type="module"> in wp_head imports PPaymentButtonBox from
-	 * the Payphone CDN and assigns it to window.PPaymentButtonBox. ES modules
-	 * are deferred by spec and execute before DOMContentLoaded, but the CDN
-	 * fetch may still be in-flight when our footer script starts. We poll until
-	 * the assignment lands (max 10 s).
-	 *
-	 * @param {Object} data Payment parameters returned by the AJAX handler.
-	 */
-	function waitForConstructor( data ) {
-		var attempts = 0;
-
-		var interval = setInterval(function () {
-			attempts++;
-
-			if ( typeof PPaymentButtonBox === 'function' ) {
-				clearInterval(interval);
-				renderBox(data);
-			} else if ( window.__payphoneSdkLoaded || attempts >= 100 ) { // stop as soon as SDK loaded or after 10 s
-				clearInterval(interval);
-				showBoxError(payphoneParams.errorText);
-			}
-		}, 100);
 	}
 
 	/**
@@ -136,7 +124,6 @@
 		}
 
 		ppRendered = true;
-
 		$('#pp-button').empty();
 
 		/* eslint-disable no-new */
@@ -165,12 +152,12 @@
 				 * @param {string} result.clientTransactionId Our client ID
 				 */
 				functionResult: function (result) {
-					handleResult(result, data.clientTransactionId);
+					handleResult( result, data.clientTransactionId );
 				},
 			}).render('pp-button');
 		} catch ( e ) {
 			ppRendered = false;
-			showBoxError(payphoneParams.errorText);
+			showBoxError( payphoneParams.errorText );
 		}
 		/* eslint-enable no-new */
 	}
@@ -199,13 +186,13 @@
 
 			// Allow the customer to retry by re-rendering the box.
 			ppRendered = false;
-			showBoxError(msg);
+			showBoxError( msg );
 			return;
 		}
 
 		// Payment approved — pass transaction IDs to process_payment() via
 		// the hidden form fields and submit the WC checkout form.
-		$('#payphone_transaction_id').val(result.transactionId);
+		$('#payphone_transaction_id').val( result.transactionId );
 		$('#payphone_client_transaction_id').val(
 			result.clientTransactionId || fallbackClientTxnId
 		);
@@ -222,7 +209,7 @@
 	}
 
 	/* ------------------------------------------------------------------
-	 * Payment method selection listener
+	 * Payment method selection listeners
 	 * ------------------------------------------------------------------ */
 
 	/**
@@ -287,14 +274,14 @@
 				data: { action: 'payphone_get_payment_data', nonce: payphoneParams.nonce },
 				success: function (r) {
 					if ( r.success && r.data ) {
-						waitForConstructor(r.data);
+						renderBox( r.data );
 					} else {
 						showBoxError(
 							( r.data && r.data.message ) ? r.data.message : payphoneParams.errorText
 						);
 					}
 				},
-				error: function () { showBoxError(payphoneParams.errorText); },
+				error: function () { showBoxError( payphoneParams.errorText ); },
 			});
 		}
 	});
@@ -309,10 +296,10 @@
 				type: 'POST',
 				data: { action: 'payphone_get_payment_data', nonce: payphoneParams.nonce },
 				success: function (r) {
-					if ( r.success && r.data ) { waitForConstructor(r.data); }
-					else { showBoxError(payphoneParams.errorText); }
+					if ( r.success && r.data ) { renderBox( r.data ); }
+					else { showBoxError( payphoneParams.errorText ); }
 				},
-				error: function () { showBoxError(payphoneParams.errorText); },
+				error: function () { showBoxError( payphoneParams.errorText ); },
 			});
 		}
 	});
@@ -329,3 +316,4 @@
 	});
 
 }(jQuery));
+
