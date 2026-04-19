@@ -9,8 +9,8 @@
  *     server via the existing `payphone_get_cart_payment_data` AJAX action.
  *     The action also stores the clientTransactionId in the WC session so
  *     process_payment() can verify it later.
- *  2. The Payphone CDN SDK is loaded via dynamic import() and
- *     PPaymentButtonBox is rendered into a div inside the content area.
+ *  2. The Payphone CDN SDK is loaded via waitForSDK(), which waits for the
+ *     <script type="module"> bridge in wp_head to expose window.PPaymentButtonBox.
  *  3. The customer completes payment inside the Payphone box.
  *     functionResult fires and we capture the transactionId and
  *     clientTransactionId in a ref.
@@ -37,10 +37,30 @@ var decodeEntities        = window.wp.htmlEntities.decodeEntities;
 
 var settings   = getSetting( 'payphone_modal_data', {} );
 var title      = decodeEntities( settings.title || 'Payphone' );
-var SDK_URL    = 'https://cdn.payphonetodoesposible.com/box/v1.1/payphone-payment-box.js';
 var AJAX_URL   = settings.ajaxUrl  || '';
 var NONCE      = settings.nonce    || '';
 var ERROR_TEXT = decodeEntities( settings.errorText || 'Completa el pago con Payphone antes de continuar.' );
+
+/* -----------------------------------------------------------------------
+ * SDK readiness helper (mirrors payphone-checkout.js)
+ *
+ * Resolves with window.PPaymentButtonBox once the <script type="module">
+ * bridge output by print_sdk_module_bridge() in wp_head has loaded the SDK.
+ * Resolves immediately if the bridge already ran. Times out after 15 s.
+ * --------------------------------------------------------------------- */
+
+function waitForSDK() {
+	if ( typeof window.PPaymentButtonBox !== 'undefined' ) {
+		return Promise.resolve( window.PPaymentButtonBox );
+	}
+	return new Promise( function ( resolve ) {
+		var timer = setTimeout( function () { resolve( null ); }, 15000 );
+		window.addEventListener( 'payphone:ready', function () {
+			clearTimeout( timer );
+			resolve( window.PPaymentButtonBox || null );
+		}, { once: true } );
+	} );
+}
 
 /* -----------------------------------------------------------------------
  * Label shown next to the radio button
@@ -101,12 +121,11 @@ return;
 
 var data = response.data;
 
-return import( SDK_URL ).then( function ( module ) {
+return waitForSDK().then( function ( Box ) {
 if ( aborted ) {
 return;
 }
 
-var Box = module.PPaymentButtonBox || module['default'];
 if ( typeof Box !== 'function' ) {
 return;
 }

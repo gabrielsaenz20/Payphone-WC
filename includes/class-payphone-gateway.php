@@ -183,9 +183,14 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 
 	/**
 	 * Enqueue the Payphone CDN stylesheet plus our own checkout JS on the
-	 * checkout page. The Payphone SDK JS is loaded on-demand via dynamic
-	 * import() inside payphone-checkout.js — no type="module" required on
-	 * the script tag.
+	 * checkout page.
+	 *
+	 * The Payphone SDK (an ES module) is pre-loaded via a dedicated
+	 * <script type="module"> bridge injected into <head> by
+	 * print_sdk_module_bridge(). That bridge assigns PPaymentButtonBox to
+	 * window and fires a 'payphone:ready' event so our classic scripts can
+	 * consume it without relying on dynamic import() — which is often silently
+	 * blocked by WordPress hosts and Content Security Policies.
 	 */
 	public function payment_scripts() {
 		if ( ! is_checkout() || 'no' === $this->enabled ) {
@@ -229,6 +234,37 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 				'processingText' => __( 'Procesando pago…', 'payphone-wc-modal' ),
 			)
 		);
+
+		// Inject the SDK module bridge into <head> (priority 5 = before other
+		// head scripts so the SDK starts downloading as early as possible).
+		add_action( 'wp_head', array( $this, 'print_sdk_module_bridge' ), 5 );
+	}
+
+	/**
+	 * Output an inline <script type="module"> in <head> that imports the
+	 * Payphone CDN SDK (an ES module), assigns PPaymentButtonBox to window,
+	 * and dispatches a 'payphone:ready' CustomEvent.
+	 *
+	 * Using a real module script is the only reliable way to load an ES module
+	 * SDK from a CDN inside WordPress. Both payphone-checkout.js (classic
+	 * checkout) and payphone-blocks.js (block checkout) call waitForSDK()
+	 * which either resolves immediately if this bridge already ran or listens
+	 * for the 'payphone:ready' event fired here.
+	 */
+	public function print_sdk_module_bridge() {
+		?>
+		<script type="module">
+		( async () => {
+			try {
+				const m = await import( 'https://cdn.payphonetodoesposible.com/box/v1.1/payphone-payment-box.js' );
+				window.PPaymentButtonBox = m.PPaymentButtonBox || m.default || m;
+			} catch ( e ) {
+				window.PPaymentButtonBox = null;
+			}
+			window.dispatchEvent( new Event( 'payphone:ready' ) );
+		} )();
+		</script>
+		<?php
 	}
 
 	// -----------------------------------------------------------------------

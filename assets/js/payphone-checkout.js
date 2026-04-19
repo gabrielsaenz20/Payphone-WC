@@ -5,7 +5,8 @@
  *  1. Customer selects Payphone from the WC payment method list.
  *  2. JS reads payment data that PHP embedded in #pp-button's data-payphone
  *     attribute (no AJAX needed).
- *  3. The Payphone CDN SDK is loaded on-demand via dynamic import().
+ *  3. waitForSDK() waits for the <script type="module"> bridge in wp_head to
+ *     finish loading the Payphone CDN SDK and assign window.PPaymentButtonBox.
  *  4. PPaymentButtonBox is rendered inside #pp-button.
  *  5. Customer pays using the Cajita de Pagos.
  *  6. functionResult fires with transactionStatus = 'Approved'.
@@ -13,9 +14,12 @@
  *  8. WC creates the order and calls process_payment().
  *  9. process_payment() confirms with Payphone API, marks the order as paid.
  *
- * Dynamic import() is used instead of a static top-level import so this file
- * can be loaded as a plain <script> (no type="module" required).  Dynamic
- * import() works in any script context in all modern browsers.
+ * The SDK is pre-loaded via a <script type="module"> bridge output by
+ * Payphone_WC_Gateway::print_sdk_module_bridge() in wp_head. That bridge
+ * assigns PPaymentButtonBox to window and fires 'payphone:ready'. Using a
+ * module script is the only reliable way to load an ES module SDK from a CDN
+ * inside WordPress — dynamic import() in non-module scripts can be silently
+ * blocked by many hosting environments and Content Security Policies.
  */
 
 /* global jQuery, payphoneParams */
@@ -23,12 +27,36 @@
 ( function ( $ ) {
 'use strict';
 
-var SDK_URL = 'https://cdn.payphonetodoesposible.com/box/v1.1/payphone-payment-box.js';
-
 /* ------------------------------------------------------------------
  * State
  * ------------------------------------------------------------------ */
 var ppRendered = false;
+
+/* ------------------------------------------------------------------
+ * SDK readiness helper
+ * ------------------------------------------------------------------ */
+
+/**
+ * Resolve with window.PPaymentButtonBox once the module bridge in wp_head
+ * has loaded the SDK and dispatched the 'payphone:ready' event.
+ * Resolves immediately if the bridge already ran. Times out after 15 s.
+ *
+ * @return {Promise<Function|null>}
+ */
+function waitForSDK() {
+if ( typeof window.PPaymentButtonBox !== 'undefined' ) {
+return Promise.resolve( window.PPaymentButtonBox );
+}
+return new Promise( function ( resolve ) {
+var timer = setTimeout( function () {
+resolve( null );
+}, 15000 );
+window.addEventListener( 'payphone:ready', function () {
+clearTimeout( timer );
+resolve( window.PPaymentButtonBox || null );
+}, { once: true } );
+} );
+}
 
 /* ------------------------------------------------------------------
  * Helpers
@@ -63,8 +91,8 @@ $( '#payphone_client_transaction_id' ).val( '' );
  * ------------------------------------------------------------------ */
 
 /**
- * Read payment data from #pp-button's data-payphone attribute and load
- * the Payphone SDK via dynamic import(), then render the box.
+ * Read payment data from #pp-button's data-payphone attribute and wait
+ * for the SDK to be ready, then render the box.
  */
 function maybeRenderBox() {
 if ( ! isPayphoneSelected() || ppRendered ) {
@@ -86,10 +114,9 @@ return;
 ppRendered = true;
 showLoading();
 
-// Dynamic import() works in any script context (module or classic).
-import( SDK_URL )
-.then( function ( module ) {
-var Box = module.PPaymentButtonBox || module['default'];
+// Wait for the module bridge in wp_head to expose window.PPaymentButtonBox.
+waitForSDK()
+.then( function ( Box ) {
 if ( typeof Box !== 'function' ) {
 ppRendered = false;
 showBoxError( payphoneParams.errorText );
