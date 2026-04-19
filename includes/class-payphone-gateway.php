@@ -64,25 +64,52 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 	/**
 	 * Output the payment fields HTML for the classic WooCommerce checkout.
 	 *
-	 * Renders the integration heading, two hidden inputs that carry the
-	 * pre-approved Payphone transaction back to process_payment(), and the
-	 * #pp-button container where PPaymentButtonBox renders automatically as
-	 * soon as the customer selects Payphone.
+	 * Calculates cart totals on the server and embeds all Payphone payment
+	 * parameters directly as a JSON data attribute on #pp-button. This lets
+	 * the JS render PPaymentButtonBox immediately on selection without any AJAX
+	 * round-trip, mirroring exactly how the working test.html works.
 	 */
 	public function payment_fields() {
 		if ( $this->description ) {
 			echo '<p class="payphone-description">' . esc_html( $this->description ) . '</p>';
 		}
 
-		echo '<h2 class="payphone-box-heading">'
-			. esc_html__( 'Integración de Cajita de Pagos', 'payphone-wc-modal' )
-			. '</h2>';
+		// Build payment data from the current cart.
+		$cart = WC()->cart;
+		$cart->calculate_totals();
+
+		$total_cents  = (int) round( $cart->get_total( 'edit' ) * 100 );
+		$tax_cents    = (int) round( $cart->get_total_tax() * 100 );
+		$pretax_cents = max( 0, $total_cents - $tax_cents );
+
+		$client_transaction_id = 'WC-INLINE-' . time() . '-' . wp_rand( 1000, 9999 );
+
+		$payment_data = array(
+			'token'               => $this->get_option( 'token' ),
+			'amount'              => $total_cents,
+			'amountWithoutTax'    => $pretax_cents,
+			'amountWithTax'       => 0,
+			'tax'                 => $tax_cents,
+			'service'             => 0,
+			'tip'                 => 0,
+			'storeId'             => $this->get_option( 'store_id' ),
+			'reference'           => $this->get_option( 'reference', __( 'Compra en tienda', 'payphone-wc-modal' ) ),
+			'currency'            => get_woocommerce_currency(),
+			'clientTransactionId' => $client_transaction_id,
+			'backgroundColor'     => $this->get_option( 'bg_color', '#6610f2' ),
+			'responseUrl'         => WC()->api_request_url( 'payphone_cajita' ),
+		);
+
+		// Store in session so process_payment() can verify clientTransactionId.
+		WC()->session->set( 'payphone_cart_payment_data', $payment_data );
 
 		// Hidden inputs carry the Payphone transaction IDs to process_payment().
 		echo '<input type="hidden" name="payphone_transaction_id" id="payphone_transaction_id" value="">';
 		echo '<input type="hidden" name="payphone_client_transaction_id" id="payphone_client_transaction_id" value="">';
 
-		echo '<div id="pp-button"></div>';
+		// Embed payment data directly – JS reads this and renders the box
+		// immediately on selection, with no AJAX call needed.
+		echo '<div id="pp-button" data-payphone="' . esc_attr( wp_json_encode( $payment_data ) ) . '"></div>';
 	}
 
 	// -----------------------------------------------------------------------

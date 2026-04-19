@@ -3,8 +3,9 @@
  *
  * Inline flow:
  *  1. Customer selects Payphone from the WC payment method list.
- *  2. JS immediately fetches cart-based payment data (AJAX – no WC order yet).
- *  3. PPaymentButtonBox is rendered inside #pp-button (within payment_fields).
+ *  2. JS reads payment data that PHP embedded in #pp-button's data-payphone
+ *     attribute — no AJAX call needed, exactly like test.html.
+ *  3. PPaymentButtonBox is rendered inside #pp-button.
  *  4. Customer pays using the Cajita de Pagos.
  *  5. functionResult fires with transactionStatus = 'Approved'.
  *  6. JS fills the two hidden inputs and triggers the WC "Place Order" button.
@@ -14,10 +15,7 @@
  *     order-received URL.
  *
  * This file is loaded with type="module" (via script_loader_tag filter) so the
- * static import resolves exactly as in test.html – no polling or window bridge
- * needed.
- *
- * Fallback (hash-change) flow is preserved for block checkout / JS failures.
+ * static CDN import resolves exactly as in the working test.html.
  */
 
 /* global jQuery, payphoneParams */
@@ -29,291 +27,237 @@ import * as _PayphoneSDK from 'https://cdn.payphonetodoesposible.com/box/v1.1/pa
 var PPaymentButtonBox = _PayphoneSDK.PPaymentButtonBox || _PayphoneSDK['default'];
 
 (function ($) {
-	'use strict';
+'use strict';
 
-	/* ------------------------------------------------------------------
-	 * State
-	 * ------------------------------------------------------------------ */
-	var ppRendered = false;
+/* ------------------------------------------------------------------
+ * State
+ * ------------------------------------------------------------------ */
+var ppRendered = false;
 
-	/* ------------------------------------------------------------------
-	 * Inline box helpers
-	 * ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+ * Helpers
+ * ------------------------------------------------------------------ */
 
-	function isPayphoneSelected() {
-		return $('input[name="payment_method"]:checked').val() === payphoneParams.gatewayId;
-	}
+function isPayphoneSelected() {
+return $('input[name="payment_method"]:checked').val() === payphoneParams.gatewayId;
+}
 
-	function showLoading() {
-		$('#pp-button').html(
-			'<div class="payphone-loading">' + payphoneParams.processingText + '</div>'
-		);
-	}
+function showLoading() {
+$('#pp-button').html(
+'<div class="payphone-loading">' + payphoneParams.processingText + '</div>'
+);
+}
 
-	function showBoxError( message ) {
-		ppRendered = false;
-		$('#pp-button').html(
-			'<p class="payphone-box-error">' + $('<span>').text(message).html() + '</p>'
-		);
-	}
+function showBoxError( message ) {
+ppRendered = false;
+$('#pp-button').html(
+'<p class="payphone-box-error">' + $('<span>').text(message).html() + '</p>'
+);
+}
 
-	function clearBox() {
-		ppRendered = false;
-		$('#pp-button').empty();
-		$('#payphone_transaction_id').val('');
-		$('#payphone_client_transaction_id').val('');
-	}
+function clearBox() {
+ppRendered = false;
+$('#pp-button').empty();
+$('#payphone_transaction_id').val('');
+$('#payphone_client_transaction_id').val('');
+}
 
-	/* ------------------------------------------------------------------
-	 * Render PPaymentButtonBox from cart data
-	 * ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+ * Render PPaymentButtonBox from embedded page data
+ * ------------------------------------------------------------------ */
 
-	/**
-	 * Fetch cart payment data and render the Payphone box.
-	 * Called whenever Payphone is selected and the box is not yet rendered.
-	 */
-	function maybeRenderBox() {
-		if ( ! isPayphoneSelected() || ppRendered ) {
-			return;
-		}
+/**
+ * Read the payment data embedded by PHP in #pp-button's data-payphone
+ * attribute and render the Payphone box immediately — no AJAX needed.
+ */
+function maybeRenderBox() {
+if ( ! isPayphoneSelected() || ppRendered ) {
+return;
+}
 
-		if ( typeof PPaymentButtonBox !== 'function' ) {
-			showBoxError( payphoneParams.errorText );
-			return;
-		}
+if ( typeof PPaymentButtonBox !== 'function' ) {
+showBoxError( payphoneParams.errorText );
+return;
+}
 
-		showLoading();
+var $btn = $( '#pp-button' );
+if ( ! $btn.length ) {
+return;
+}
 
-		$.ajax({
-			url:  payphoneParams.ajaxUrl,
-			type: 'POST',
-			data: {
-				action: 'payphone_get_cart_payment_data',
-				nonce:  payphoneParams.nonce,
-			},
-			success: function (response) {
-				if ( response.success && response.data ) {
-					renderBox( response.data );
-				} else {
-					showBoxError(
-						( response.data && response.data.message )
-							? response.data.message
-							: payphoneParams.errorText
-					);
-				}
-			},
-			error: function () {
-				showBoxError( payphoneParams.errorText );
-			},
-		});
-	}
+// PHP embeds all payment parameters as JSON in the data-payphone attribute.
+var data = $btn.data( 'payphone' );
+if ( ! data || ! data.token ) {
+showBoxError( payphoneParams.errorText );
+return;
+}
 
-	/**
-	 * Instantiate PPaymentButtonBox and render it into #pp-button.
-	 *
-	 * @param {Object} data Payment parameters.
-	 */
-	function renderBox( data ) {
-		if ( ppRendered ) {
-			return;
-		}
+renderBox( data );
+}
 
-		var container = document.getElementById('pp-button');
-		if ( ! container ) {
-			return;
-		}
+/**
+ * Instantiate PPaymentButtonBox and render it into #pp-button.
+ *
+ * @param {Object} data Payment parameters (from data-payphone attribute).
+ */
+function renderBox( data ) {
+if ( ppRendered ) {
+return;
+}
 
-		ppRendered = true;
-		$('#pp-button').empty();
+var container = document.getElementById( 'pp-button' );
+if ( ! container ) {
+return;
+}
 
-		/* eslint-disable no-new */
-		try {
-			new PPaymentButtonBox({
-				token:               data.token,
-				amount:              data.amount,
-				amountWithoutTax:    data.amountWithoutTax,
-				amountWithTax:       data.amountWithTax,
-				tax:                 data.tax,
-				service:             data.service,
-				tip:                 data.tip,
-				storeId:             data.storeId,
-				reference:           data.reference,
-				currency:            data.currency,
-				clientTransactionId: data.clientTransactionId,
-				backgroundColor:     data.backgroundColor,
-				responseUrl:         data.responseUrl,
+ppRendered = true;
+$( '#pp-button' ).empty();
 
-				/**
-				 * Called by the Payphone box when the transaction finishes.
-				 *
-				 * @param {Object} result
-				 * @param {string} result.transactionStatus  e.g. 'Approved'
-				 * @param {number} result.transactionId      Payphone transaction ID
-				 * @param {string} result.clientTransactionId Our client ID
-				 */
-				functionResult: function (result) {
-					handleResult( result, data.clientTransactionId );
-				},
-			}).render('pp-button');
-		} catch ( e ) {
-			ppRendered = false;
-			showBoxError( payphoneParams.errorText );
-		}
-		/* eslint-enable no-new */
-	}
+/* eslint-disable no-new */
+try {
+new PPaymentButtonBox({
+token:               data.token,
+amount:              data.amount,
+amountWithoutTax:    data.amountWithoutTax,
+amountWithTax:       data.amountWithTax,
+tax:                 data.tax,
+service:             data.service,
+tip:                 data.tip,
+storeId:             data.storeId,
+reference:           data.reference,
+currency:            data.currency,
+clientTransactionId: data.clientTransactionId,
+backgroundColor:     data.backgroundColor,
+responseUrl:         data.responseUrl,
 
-	/* ------------------------------------------------------------------
-	 * Payment result handling
-	 * ------------------------------------------------------------------ */
+/**
+ * Called by the Payphone box when the transaction finishes.
+ *
+ * @param {Object} result
+ * @param {string} result.transactionStatus  e.g. 'Approved'
+ * @param {number} result.transactionId      Payphone transaction ID
+ * @param {string} result.clientTransactionId Our client ID
+ */
+functionResult: function (result) {
+handleResult( result, data.clientTransactionId );
+},
+}).render( 'pp-button' );
+} catch ( e ) {
+ppRendered = false;
+showBoxError( payphoneParams.errorText );
+}
+/* eslint-enable no-new */
+}
 
-	/**
-	 * Handle the result returned by PPaymentButtonBox.
-	 *
-	 * On Approved: store transaction IDs in hidden inputs, submit the WC
-	 * checkout form. process_payment() will confirm the transaction and
-	 * mark the order as paid.
-	 *
-	 * On failure/cancel: show an error and allow the customer to retry.
-	 *
-	 * @param {Object} result              Payphone result.
-	 * @param {string} fallbackClientTxnId Fallback clientTransactionId.
-	 */
-	function handleResult( result, fallbackClientTxnId ) {
-		if ( ! result || result.transactionStatus !== 'Approved' ) {
-			var msg = ( result && result.transactionStatus )
-				? payphoneParams.errorText + ' (' + result.transactionStatus + ')'
-				: payphoneParams.errorText;
+/* ------------------------------------------------------------------
+ * Payment result handling
+ * ------------------------------------------------------------------ */
 
-			// Allow the customer to retry by re-rendering the box.
-			ppRendered = false;
-			showBoxError( msg );
-			return;
-		}
+/**
+ * Handle the result returned by PPaymentButtonBox.
+ *
+ * On Approved: store transaction IDs in hidden inputs, submit the WC
+ * checkout form. process_payment() will confirm the transaction and
+ * mark the order as paid.
+ *
+ * On failure/cancel: show an error and allow the customer to retry.
+ *
+ * @param {Object} result              Payphone result.
+ * @param {string} fallbackClientTxnId Fallback clientTransactionId.
+ */
+function handleResult( result, fallbackClientTxnId ) {
+if ( ! result || result.transactionStatus !== 'Approved' ) {
+var msg = ( result && result.transactionStatus )
+? payphoneParams.errorText + ' (' + result.transactionStatus + ')'
+: payphoneParams.errorText;
 
-		// Payment approved — pass transaction IDs to process_payment() via
-		// the hidden form fields and submit the WC checkout form.
-		$('#payphone_transaction_id').val( result.transactionId );
-		$('#payphone_client_transaction_id').val(
-			result.clientTransactionId || fallbackClientTxnId
-		);
+ppRendered = false;
+showBoxError( msg );
+return;
+}
 
-		// Show processing message while WC creates the order.
-		showLoading();
+$( '#payphone_transaction_id' ).val( result.transactionId );
+$( '#payphone_client_transaction_id' ).val(
+result.clientTransactionId || fallbackClientTxnId
+);
 
-		// Unblock the form (it may be blocked if WC already tried to submit).
-		$('form.checkout, form.woocommerce-checkout').first().unblock();
+showLoading();
 
-		// Trigger Place Order — WC validates the form, creates the order, then
-		// calls process_payment() with our hidden-field transaction data.
-		$('#place_order').trigger('click');
-	}
+$( 'form.checkout, form.woocommerce-checkout' ).first().unblock();
 
-	/* ------------------------------------------------------------------
-	 * Payment method selection listeners
-	 * ------------------------------------------------------------------ */
+// Trigger Place Order — WC creates the order, then calls process_payment().
+$( '#place_order' ).trigger( 'click' );
+}
 
-	/**
-	 * Render the box immediately when Payphone is selected.
-	 * Clear the box when any other method is selected.
-	 *
-	 * We listen to both the WooCommerce `payment_method_selected` event and the
-	 * native `change` event on the radio buttons, because some themes/plugins
-	 * trigger one but not the other.
-	 */
-	$(document.body).on('payment_method_selected', function () {
-		if ( isPayphoneSelected() ) {
-			maybeRenderBox();
-		} else {
-			clearBox();
-		}
-	});
+/* ------------------------------------------------------------------
+ * Payment method selection listeners
+ * ------------------------------------------------------------------ */
 
-	$(document).on('change', 'input[name="payment_method"]', function () {
-		if ( isPayphoneSelected() ) {
-			maybeRenderBox();
-		} else {
-			clearBox();
-		}
-	});
+$( document.body ).on( 'payment_method_selected', function () {
+if ( isPayphoneSelected() ) {
+maybeRenderBox();
+} else {
+clearBox();
+}
+} );
 
-	/**
-	 * After each checkout update (coupon, shipping, etc.) the payment_fields
-	 * HTML is re-rendered by WC, so we must re-render the box.
-	 */
-	$(document.body).on('updated_checkout', function () {
-		ppRendered = false; // DOM was refreshed; allow re-render.
-		if ( isPayphoneSelected() ) {
-			maybeRenderBox();
-		}
-	});
+$( document ).on( 'change', 'input[name="payment_method"]', function () {
+if ( isPayphoneSelected() ) {
+maybeRenderBox();
+} else {
+clearBox();
+}
+} );
 
-	/* ------------------------------------------------------------------
-	 * Fallback: hash-change flow (block checkout / JS errors)
-	 * ------------------------------------------------------------------ */
+/**
+ * After each checkout update (coupon, shipping, etc.) WC refreshes the
+ * payment_fields HTML — which gives us a fresh data-payphone attribute
+ * with updated totals. Re-render the box.
+ */
+$( document.body ).on( 'updated_checkout', function () {
+ppRendered = false;
+if ( isPayphoneSelected() ) {
+maybeRenderBox();
+}
+} );
 
-	/**
-	 * Classic checkout: intercept the hash-redirect returned by process_payment()
-	 * (fallback path only – the inline flow bypasses this entirely).
-	 */
-	$(document.body).on('checkout_place_order_success', function (event, response) {
-		if (
-			response &&
-			response.redirect &&
-			response.redirect.indexOf('#payphone-modal-open') !== -1
-		) {
-			$('form.checkout').unblock();
-			$('form.woocommerce-checkout').unblock();
+/* ------------------------------------------------------------------
+ * Fallback: hash-change flow (block checkout / JS errors)
+ * ------------------------------------------------------------------ */
 
-			// Fetch order-based payment data and re-render the box inline.
-			ppRendered = false;
-			showLoading();
+$( document.body ).on( 'checkout_place_order_success', function (event, response) {
+if (
+response &&
+response.redirect &&
+response.redirect.indexOf( '#payphone-modal-open' ) !== -1
+) {
+$( 'form.checkout' ).unblock();
+$( 'form.woocommerce-checkout' ).unblock();
 
-			$.ajax({
-				url:  payphoneParams.ajaxUrl,
-				type: 'POST',
-				data: { action: 'payphone_get_payment_data', nonce: payphoneParams.nonce },
-				success: function (r) {
-					if ( r.success && r.data ) {
-						renderBox( r.data );
-					} else {
-						showBoxError(
-							( r.data && r.data.message ) ? r.data.message : payphoneParams.errorText
-						);
-					}
-				},
-				error: function () { showBoxError( payphoneParams.errorText ); },
-			});
-		}
-	});
+ppRendered = false;
+if ( isPayphoneSelected() ) {
+maybeRenderBox();
+}
+}
+} );
 
-	window.addEventListener('hashchange', function () {
-		if ( window.location.hash === '#payphone-modal-open' && ! ppRendered ) {
-			ppRendered = false;
-			showLoading();
+window.addEventListener( 'hashchange', function () {
+if ( window.location.hash === '#payphone-modal-open' && ! ppRendered ) {
+ppRendered = false;
+if ( isPayphoneSelected() ) {
+maybeRenderBox();
+}
+}
+} );
 
-			$.ajax({
-				url:  payphoneParams.ajaxUrl,
-				type: 'POST',
-				data: { action: 'payphone_get_payment_data', nonce: payphoneParams.nonce },
-				success: function (r) {
-					if ( r.success && r.data ) { renderBox( r.data ); }
-					else { showBoxError( payphoneParams.errorText ); }
-				},
-				error: function () { showBoxError( payphoneParams.errorText ); },
-			});
-		}
-	});
+/* ------------------------------------------------------------------
+ * Initialisation
+ * ------------------------------------------------------------------ */
 
-	/* ------------------------------------------------------------------
-	 * Initialisation
-	 * ------------------------------------------------------------------ */
+$( function () {
+if ( isPayphoneSelected() ) {
+maybeRenderBox();
+}
+} );
 
-	$(function () {
-		// Render the box on page load if Payphone is already pre-selected.
-		if ( isPayphoneSelected() ) {
-			maybeRenderBox();
-		}
-	});
-
-}(jQuery));
-
+}( jQuery ));
