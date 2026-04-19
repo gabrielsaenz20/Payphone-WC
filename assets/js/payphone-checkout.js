@@ -265,6 +265,41 @@
 	}
 
 	/* ------------------------------------------------------------------
+	 * "Pagar con Payphone" button (classic checkout)
+	 * ------------------------------------------------------------------ */
+
+	/**
+	 * When the customer clicks the "Pagar con Payphone" button rendered inside
+	 * the payment fields area, programmatically trigger the standard WC
+	 * "Place Order" button. This kicks off the AJAX order creation, which then
+	 * returns our magic hash and opens the modal.
+	 */
+	$(document).on('click', '#payphone-pay-button', function (e) {
+		e.preventDefault();
+		$('#place_order').trigger('click');
+	});
+
+	/**
+	 * Hide the generic "Place Order" button when Payphone is selected so the
+	 * customer uses our branded "Pagar con Payphone" button instead.
+	 * Restore it when another gateway is picked.
+	 */
+	function syncPlaceOrderButton() {
+		var selected = $('input[name="payment_method"]:checked').val();
+		if ( selected === payphoneParams.gatewayId ) {
+			$('#place_order').hide();
+		} else {
+			$('#place_order').show();
+		}
+	}
+
+	// Run once on load and again whenever the payment method changes.
+	$(document.body).on( 'payment_method_selected updated_checkout', syncPlaceOrderButton );
+	$(function () {
+		syncPlaceOrderButton();
+	});
+
+	/* ------------------------------------------------------------------
 	 * WooCommerce checkout integration
 	 * ------------------------------------------------------------------ */
 

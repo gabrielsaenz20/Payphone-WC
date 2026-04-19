@@ -42,6 +42,7 @@
 		edit:           createElement( PayphoneContent, null ),
 		canMakePayment: function () { return true; },
 		ariaLabel:      title,
+		placeOrderButtonLabel: decodeEntities( 'Pagar con Payphone' ),
 		supports: {
 			features: settings.supports || [ 'products' ],
 		},

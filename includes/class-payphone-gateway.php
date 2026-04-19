@@ -24,7 +24,7 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 	public function __construct() {
 		$this->id                 = 'payphone_modal';
 		$this->icon               = '';
-		$this->has_fields         = false;
+		$this->has_fields         = true;
 		$this->method_title       = __( 'Payphone', 'payphone-wc-modal' );
 		$this->method_description = __( 'Acepta pagos con Payphone mediante una ventana emergente segura en la página de checkout, sin redirigir al cliente.', 'payphone-wc-modal' );
 		$this->supports           = array( 'products' );
@@ -54,6 +54,29 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 		// WC API endpoint: Payphone redirects the browser here after payment.
 		// URL: {home}/wc-api/payphone_cajita/  – configure this in Payphone dashboard.
 		add_action( 'woocommerce_api_payphone_cajita', array( $this, 'handle_response_url' ) );
+	}
+
+	// -----------------------------------------------------------------------
+	// Classic checkout payment fields
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Output the payment fields HTML for the classic WooCommerce checkout.
+	 *
+	 * Renders the gateway description (if any) followed by a prominent
+	 * "Pagar con Payphone" button. Clicking that button programmatically
+	 * triggers the standard WC "Place Order" submit so the order is created
+	 * and our modal is opened, without the customer needing to scroll down to
+	 * the separate "Place Order" button at the bottom of the form.
+	 */
+	public function payment_fields() {
+		if ( $this->description ) {
+			echo '<p class="payphone-description">' . esc_html( $this->description ) . '</p>';
+		}
+
+		echo '<button type="button" id="payphone-pay-button" class="payphone-pay-btn">'
+			. esc_html__( 'Pagar con Payphone', 'payphone-wc-modal' )
+			. '</button>';
 	}
 
 	/**
