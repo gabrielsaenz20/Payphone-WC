@@ -19,9 +19,11 @@ class PayphonePaymentResult
   {
     $settings = get_option('woocommerce_' . PayphoneConfig::PAYPHONE_GATEWAY_ID . '_settings', array());
     $result_page_id = isset($settings['result_page_id']) ? (int) $settings['result_page_id'] : 0;
+    $stored_post_id = (int) get_option(PayphoneConfig::PAGE_RESULT_SLUG);
 
     $is_result_page = is_single(PayphoneConfig::PAGE_RESULT_SLUG)
-      || ($result_page_id > 0 && is_page($result_page_id));
+      || ($result_page_id > 0 && is_page($result_page_id))
+      || ($stored_post_id > 0 && (is_single($stored_post_id) || is_page($stored_post_id)));
 
     if ($is_result_page) {
       include_once WC_PAYPHONE_PLUGIN_PATH . 'templates/payphone-order-template.php';
@@ -44,6 +46,14 @@ class PayphonePaymentResult
   {
     if (!current_user_can('activate_plugins'))
       return;
+
+    // Check for existing post of any type with this slug so we don't create duplicates.
+    $existing = get_page_by_path(PayphoneConfig::PAGE_RESULT_SLUG, OBJECT, array('page', 'post'));
+    if ($existing) {
+      update_option($this->pageResultId, $existing->ID);
+      return;
+    }
+
     $new_page = array(
       'post_type' => 'post',
       'post_title' => 'Resultado de Pago con Payphone',
@@ -53,9 +63,7 @@ class PayphonePaymentResult
       'comment_status' => 'closed',
       'ping_status' => 'closed'
     );
-    if (!get_page_by_path(PayphoneConfig::PAGE_RESULT_SLUG, OBJECT, 'page')) { // Check If Page Not Exits
-      $pageId = wp_insert_post($new_page);
-      update_option($this->pageResultId, $pageId);
-    }
+    $pageId = wp_insert_post($new_page);
+    update_option($this->pageResultId, $pageId);
   }
 }

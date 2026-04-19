@@ -140,7 +140,13 @@ class PayphonePaymentGateway extends WC_Payment_Gateway
         $order->save();
 
         $configured_page = (int) $this->get_option('result_page_id');
-        $pageResultId = $configured_page ?: get_option(PayphoneConfig::PAGE_RESULT_SLUG);
+        if ($configured_page > 0) {
+          $pageResultId = $configured_page;
+        } else {
+          // Resolve by slug so a stale stored option can't send users to a -2 URL.
+          $existing = get_page_by_path(PayphoneConfig::PAGE_RESULT_SLUG, OBJECT, array('page', 'post'));
+          $pageResultId = $existing ? $existing->ID : (int) get_option(PayphoneConfig::PAGE_RESULT_SLUG);
+        }
         return array(
           'result' => 'success',
           'redirect' => add_query_arg('orderId', $order_id, get_permalink($pageResultId))
