@@ -255,6 +255,8 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 		?>
 		<script type="module">
 		( async () => {
+			if ( window.__payphoneBridgeInjected ) { return; }
+			window.__payphoneBridgeInjected = true;
 			try {
 				const m = await import( 'https://cdn.payphonetodoesposible.com/box/v1.1/payphone-payment-box.js' );
 				window.PPaymentButtonBox = m.PPaymentButtonBox || m.default || m;

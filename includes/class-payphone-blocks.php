@@ -50,9 +50,21 @@ class Payphone_WC_Blocks extends AbstractPaymentMethodType {
 	/**
 	 * Register and return the JS handle(s) needed by the Checkout block.
 	 *
+	 * Also enqueues the Payphone box CSS here so it is guaranteed to be
+	 * present on the block-checkout page regardless of whether the classic
+	 * payment_scripts() hook ran.
+	 *
 	 * @return string[]
 	 */
 	public function get_payment_method_script_handles() {
+		// Payphone CDN stylesheet (no version – CDN-managed).
+		wp_enqueue_style(
+			'payphone-box-css',
+			'https://cdn.payphonetodoesposible.com/box/v1.1/payphone-payment-box.css',
+			array(),
+			null
+		);
+
 		wp_register_script(
 			'payphone-blocks-js',
 			PAYPHONE_WC_PLUGIN_URL . 'assets/js/payphone-blocks.js',

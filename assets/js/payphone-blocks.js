@@ -1,28 +1,31 @@
 /**
  * Payphone WC Modal – WooCommerce Blocks checkout integration.
  *
- * Registers the Payphone payment method in the block-based checkout.
+ * Registers the Payphone payment method in the block-based checkout
+ * (WooCommerce 8.x+ with the Checkout block as the default).
  *
  * Flow:
- *  1. When Payphone is selected the content component mounts and fetches
- *     fresh payment data (token, amounts, clientTransactionId) from the
- *     server via the existing `payphone_get_cart_payment_data` AJAX action.
- *     The action also stores the clientTransactionId in the WC session so
- *     process_payment() can verify it later.
- *  2. The Payphone CDN SDK is loaded via waitForSDK(), which waits for the
- *     <script type="module"> bridge in wp_head to expose window.PPaymentButtonBox.
- *  3. The customer completes payment inside the Payphone box.
- *     functionResult fires and we capture the transactionId and
- *     clientTransactionId in a ref.
- *  4. When the customer clicks "Place Order", onPaymentProcessing fires.
- *     – If payment not yet approved: block checkout and show an error.
+ *  1. When Payphone is selected the content component mounts.
+ *  2. loadSDK() and the AJAX payment-data fetch run in parallel.
+ *     – loadSDK() is self-contained: if window.PPaymentButtonBox is already
+ *       set (by the wp_head bridge), it resolves immediately; otherwise it
+ *       injects its own <script type="module"> bridge and waits for the
+ *       'payphone:ready' event.
+ *     – The AJAX call returns the token, amounts, and clientTransactionId
+ *       that process_payment() will later verify against the WC session.
+ *  3. Once both are ready, PPaymentButtonBox is rendered inline into
+ *     #pp-button-block — no modal, no redirect, no new window.
+ *  4. functionResult fires with transactionStatus = 'Approved' and the
+ *     transaction IDs are stored in a ref.
+ *  5. When the customer clicks "Place Order", onPaymentSetup fires.
+ *     – If payment not yet approved: return an error response.
  *     – If approved: return paymentMethodData with the transaction IDs.
- *  5. WC Blocks sends those IDs to the server, where process_payment()
- *     finds them in $_POST, verifies against the session and calls the
- *     Payphone Confirm API to mark the order as paid.
+ *  6. WC Blocks POSTs those IDs to process_payment() which verifies them
+ *     against the session and calls the Payphone Confirm API.
  *
- * If the cart totals change (shipping, coupon, etc.) the effect re-runs,
- * re-fetches fresh amounts from the server, and re-renders the box.
+ * Compatible with WooCommerce Blocks 8.6+ which renamed onPaymentProcessing
+ * to onPaymentSetup. A fallback to onPaymentProcessing is kept for older
+ * sites that haven't updated yet.
  */
 
 ( function () {
@@ -37,29 +40,89 @@ var decodeEntities        = window.wp.htmlEntities.decodeEntities;
 
 var settings   = getSetting( 'payphone_modal_data', {} );
 var title      = decodeEntities( settings.title || 'Payphone' );
-var AJAX_URL   = settings.ajaxUrl  || '';
-var NONCE      = settings.nonce    || '';
+var AJAX_URL   = settings.ajaxUrl || '';
+var NONCE      = settings.nonce   || '';
+var SDK_URL    = 'https://cdn.payphonetodoesposible.com/box/v1.1/payphone-payment-box.js';
+var SDK_CSS    = 'https://cdn.payphonetodoesposible.com/box/v1.1/payphone-payment-box.css';
 var ERROR_TEXT = decodeEntities( settings.errorText || 'Completa el pago con Payphone antes de continuar.' );
 
 /* -----------------------------------------------------------------------
- * SDK readiness helper (mirrors payphone-checkout.js)
+ * Self-contained SDK loader
  *
- * Resolves with window.PPaymentButtonBox once the <script type="module">
- * bridge output by print_sdk_module_bridge() in wp_head has loaded the SDK.
- * Resolves immediately if the bridge already ran. Times out after 15 s.
+ * Returns a Promise that resolves with the PPaymentButtonBox constructor.
+ *
+ * Strategy:
+ *  a) If window.PPaymentButtonBox is already set (by the wp_head bridge
+ *     injected by payment_scripts()), resolve immediately.
+ *  b) Otherwise, inject a <script type="module"> bridge ourselves and wait
+ *     for the 'payphone:ready' event. A module-type guard flag prevents
+ *     double-injection if this function is called multiple times.
+ *  c) A 15-second safety timeout ensures we never block indefinitely.
+ *
+ * The Payphone box CSS is also guaranteed to be present on the page.
  * --------------------------------------------------------------------- */
 
-function waitForSDK() {
-	if ( typeof window.PPaymentButtonBox !== 'undefined' ) {
-		return Promise.resolve( window.PPaymentButtonBox );
+var sdkLoadPromise = null;
+
+function loadSDK() {
+	if ( sdkLoadPromise ) {
+		return sdkLoadPromise;
 	}
-	return new Promise( function ( resolve ) {
-		var timer = setTimeout( function () { resolve( null ); }, 15000 );
+
+	// Ensure the Payphone box CSS is loaded (the wp_enqueue_scripts hook
+	// in payment_scripts() covers classic + block checkout, but this acts
+	// as a safety net in case the enqueue didn't run).
+	if ( ! document.querySelector( 'link[href*="payphone-payment-box.css"]' ) ) {
+		var link  = document.createElement( 'link' );
+		link.rel  = 'stylesheet';
+		link.href = SDK_CSS;
+		document.head.appendChild( link );
+	}
+
+	// Fast path: SDK already loaded by the wp_head bridge.
+	if ( typeof window.PPaymentButtonBox !== 'undefined' ) {
+		sdkLoadPromise = Promise.resolve( window.PPaymentButtonBox );
+		return sdkLoadPromise;
+	}
+
+	sdkLoadPromise = new Promise( function ( resolve ) {
+		var done  = false;
+		var timer = setTimeout( function () {
+			if ( ! done ) {
+				done = true;
+				resolve( null );
+			}
+		}, 15000 );
+
 		window.addEventListener( 'payphone:ready', function () {
-			clearTimeout( timer );
-			resolve( window.PPaymentButtonBox || null );
+			if ( ! done ) {
+				done = true;
+				clearTimeout( timer );
+				resolve( window.PPaymentButtonBox || null );
+			}
 		}, { once: true } );
+
+		// Inject bridge only once (the wp_head bridge sets the same flag).
+		if ( ! window.__payphoneBridgeInjected ) {
+			window.__payphoneBridgeInjected = true;
+			var script       = document.createElement( 'script' );
+			script.type      = 'module';
+			script.textContent = [
+				'( async () => {',
+				'  try {',
+				'    const m = await import( "' + SDK_URL + '" );',
+				'    window.PPaymentButtonBox = m.PPaymentButtonBox || m.default || m;',
+				'  } catch ( e ) {',
+				'    window.PPaymentButtonBox = null;',
+				'  }',
+				'  window.dispatchEvent( new Event( "payphone:ready" ) );',
+				'} )();',
+			].join( '\n' );
+			document.head.appendChild( script );
+		}
 	} );
+
+	return sdkLoadPromise;
 }
 
 /* -----------------------------------------------------------------------
@@ -67,179 +130,184 @@ function waitForSDK() {
  * --------------------------------------------------------------------- */
 
 function PayphoneLabel() {
-return createElement( 'span', null, title );
+	return createElement( 'span', null, title );
 }
 
 /* -----------------------------------------------------------------------
- * Content shown when Payphone is selected in the block checkout
+ * Content rendered inline when Payphone is selected in the block checkout
  * --------------------------------------------------------------------- */
 
 function PayphoneContent( props ) {
-var eventRegistration   = props.eventRegistration   || {};
-var emitResponse        = props.emitResponse        || {};
-var onPaymentProcessing = eventRegistration.onPaymentProcessing;
+	var eventRegistration = props.eventRegistration || {};
+	var emitResponse      = props.emitResponse      || {};
 
-// Holds the approved transaction data from PPaymentButtonBox.functionResult.
-var txnRef = useRef( null );
+	// WC Blocks 8.6+ renamed onPaymentProcessing → onPaymentSetup.
+	// Keep the fallback for older WC installs.
+	var onPaymentSetup = eventRegistration.onPaymentSetup || eventRegistration.onPaymentProcessing;
 
-// Derive a cart-total key so we can detect when totals change and
-// re-initialize the box with up-to-date amounts.
-var billing    = props.billing || {};
-var cartTotals = billing.cartTotals || {};
-var totalKey   = String( cartTotals.total_price || '0' ) + '-' + String( cartTotals.total_tax || '0' );
+	// Holds the approved transaction data returned by functionResult.
+	var txnRef = useRef( null );
 
-/* -------------------------------------------------------------------
- * Fetch payment data from the server and render PPaymentButtonBox.
- * Reruns whenever cart totals change.
- * ----------------------------------------------------------------- */
-useEffect( function () {
-if ( ! AJAX_URL || ! NONCE ) {
-return;
-}
+	// Derive a cart-total key to re-initialize the box when amounts change
+	// (coupon applied, shipping method changed, etc.).
+	// In WC Blocks 8.x+, cartTotals is a root-level prop; in older versions
+	// it lives inside props.billing.
+	var cartTotals = props.cartTotals || ( props.billing && props.billing.cartTotals ) || {};
+	var totalKey   = String( cartTotals.total_price || '0' ) + '-' + String( cartTotals.total_tax || '0' );
 
-var containerId = 'pp-button-block';
-var container   = document.getElementById( containerId );
-if ( ! container ) {
-return;
-}
+	/* -------------------------------------------------------------------
+	 * Load SDK + fetch payment data in parallel, then render the box.
+	 * Reruns whenever cart totals change.
+	 * ----------------------------------------------------------------- */
+	useEffect( function () {
+		if ( ! AJAX_URL || ! NONCE ) {
+			return;
+		}
 
-// Reset prior state.
-txnRef.current    = null;
-container.innerHTML = '';
+		var aborted     = false;
+		var containerId = 'pp-button-block';
 
-var aborted  = false;
-var formData = new FormData();
-formData.append( 'action', 'payphone_get_cart_payment_data' );
-formData.append( 'nonce',  NONCE );
+		txnRef.current = null;
 
-fetch( AJAX_URL, { method: 'POST', body: formData, credentials: 'same-origin' } )
-.then( function ( r ) { return r.json(); } )
-.then( function ( response ) {
-if ( aborted || ! response.success || ! response.data ) {
-return;
-}
+		var formData = new FormData();
+		formData.append( 'action', 'payphone_get_cart_payment_data' );
+		formData.append( 'nonce',  NONCE );
 
-var data = response.data;
+		// Start SDK loading and AJAX fetch concurrently.
+		Promise.all( [
+			loadSDK(),
+			fetch( AJAX_URL, { method: 'POST', body: formData, credentials: 'same-origin' } )
+				.then( function ( r ) { return r.json(); } ),
+		] )
+		.then( function ( results ) {
+			if ( aborted ) {
+				return;
+			}
 
-return waitForSDK().then( function ( Box ) {
-if ( aborted ) {
-return;
-}
+			var Box      = results[ 0 ];
+			var response = results[ 1 ];
 
-if ( typeof Box !== 'function' ) {
-return;
-}
+			if ( typeof Box !== 'function' ) {
+				return;
+			}
+			if ( ! response.success || ! response.data ) {
+				return;
+			}
 
-var el = document.getElementById( containerId );
-if ( ! el ) {
-return;
-}
+			var data = response.data;
+			var el   = document.getElementById( containerId );
+			if ( ! el ) {
+				return;
+			}
 
-el.innerHTML = '';
+			el.innerHTML = '';
 
-try {
-new Box( {
-token:               data.token,
-amount:              data.amount,
-amountWithoutTax:    data.amountWithoutTax,
-amountWithTax:       data.amountWithTax,
-tax:                 data.tax,
-service:             data.service  || 0,
-tip:                 data.tip      || 0,
-storeId:             data.storeId,
-reference:           data.reference,
-currency:            data.currency,
-clientTransactionId: data.clientTransactionId,
-backgroundColor:     data.backgroundColor,
-responseUrl:         data.responseUrl,
+			/* eslint-disable no-new */
+			try {
+				new Box( {
+					token:               data.token,
+					amount:              data.amount,
+					amountWithoutTax:    data.amountWithoutTax,
+					amountWithTax:       data.amountWithTax,
+					tax:                 data.tax,
+					service:             data.service  || 0,
+					tip:                 data.tip      || 0,
+					storeId:             data.storeId,
+					reference:           data.reference,
+					currency:            data.currency,
+					clientTransactionId: data.clientTransactionId,
+					backgroundColor:     data.backgroundColor,
+					responseUrl:         data.responseUrl,
 
-/**
- * Called by the Payphone box when the
- * transaction finishes.
- *
- * @param {Object} result
- */
-functionResult: function ( result ) {
-if ( result && result.transactionStatus === 'Approved' ) {
-txnRef.current = {
-transactionId:       String( result.transactionId ),
-clientTransactionId: result.clientTransactionId
-|| data.clientTransactionId,
-};
-}
-},
-} ).render( containerId );
-} catch ( e ) {
-// SDK render error – leave the container empty so
-// the user at least sees the payment option without
-// a broken box.
-}
-} );
-} )
-.catch( function () {
-// Network or parse failure – silent. The user will see the
-// error when they try to place the order.
-} );
+					/**
+					 * Called by the Payphone box when the transaction finishes.
+					 *
+					 * @param {Object} result
+					 */
+					functionResult: function ( result ) {
+						if ( result && result.transactionStatus === 'Approved' ) {
+							txnRef.current = {
+								transactionId:       String( result.transactionId ),
+								clientTransactionId: result.clientTransactionId || data.clientTransactionId,
+							};
+						}
+					},
+				} ).render( containerId );
+			} catch ( e ) {
+				// SDK render error — container stays empty, payment option
+				// remains visible without a broken box.
+			}
+			/* eslint-enable no-new */
+		} )
+		.catch( function () {
+			// Network or parse failure — silent. The error will surface
+			// when the customer attempts to place the order.
+		} );
 
-// Mark this render cycle stale on re-run or unmount.
-return function () {
-aborted = true;
-};
-}, [ totalKey ] );
+		return function () {
+			aborted = true;
+			// Clear the box on unmount / re-render so a fresh instance
+			// is created on the next run.
+			var el = document.getElementById( 'pp-button-block' );
+			if ( el ) {
+				el.innerHTML = '';
+			}
+		};
+	}, [ totalKey ] );
 
-/* -------------------------------------------------------------------
- * Register the Place-Order gate.
- * ----------------------------------------------------------------- */
-useEffect( function () {
-if ( typeof onPaymentProcessing !== 'function' ) {
-return;
-}
+	/* -------------------------------------------------------------------
+	 * Place-Order gate: called by WC Blocks when the form is submitted.
+	 * ----------------------------------------------------------------- */
+	useEffect( function () {
+		if ( typeof onPaymentSetup !== 'function' ) {
+			return;
+		}
 
-var unsubscribe = onPaymentProcessing( function () {
-var txn = txnRef.current;
+		var unsubscribe = onPaymentSetup( function () {
+			var txn = txnRef.current;
 
-if ( ! txn || ! txn.transactionId ) {
-return {
-type:    emitResponse.responseTypes
-? emitResponse.responseTypes.ERROR
-: 'error',
-message: ERROR_TEXT,
-};
-}
+			if ( ! txn || ! txn.transactionId ) {
+				return {
+					type:    emitResponse.responseTypes
+						? emitResponse.responseTypes.ERROR
+						: 'error',
+					message: ERROR_TEXT,
+				};
+			}
 
-return {
-type: emitResponse.responseTypes
-? emitResponse.responseTypes.SUCCESS
-: 'success',
-meta: {
-paymentMethodData: {
-payphone_transaction_id:        txn.transactionId,
-payphone_client_transaction_id: txn.clientTransactionId,
-},
-},
-};
-} );
+			return {
+				type: emitResponse.responseTypes
+					? emitResponse.responseTypes.SUCCESS
+					: 'success',
+				meta: {
+					paymentMethodData: {
+						payphone_transaction_id:        txn.transactionId,
+						payphone_client_transaction_id: txn.clientTransactionId,
+					},
+				},
+			};
+		} );
 
-return typeof unsubscribe === 'function' ? unsubscribe : undefined;
-}, [ onPaymentProcessing ] );
+		return typeof unsubscribe === 'function' ? unsubscribe : undefined;
+	}, [ onPaymentSetup ] );
 
-/* -------------------------------------------------------------------
- * Render
- * ----------------------------------------------------------------- */
-var description = settings.description
-? createElement(
-'p',
-{ className: 'payphone-description' },
-decodeEntities( settings.description )
-)
-: null;
+	/* -------------------------------------------------------------------
+	 * Render
+	 * ----------------------------------------------------------------- */
+	var description = settings.description
+		? createElement(
+			'p',
+			{ className: 'payphone-description' },
+			decodeEntities( settings.description )
+		)
+		: null;
 
-return createElement(
-'div',
-null,
-description,
-createElement( 'div', { id: 'pp-button-block' } )
-);
+	return createElement(
+		'div',
+		null,
+		description,
+		createElement( 'div', { id: 'pp-button-block' } )
+	);
 }
 
 /* -----------------------------------------------------------------------
@@ -247,25 +315,25 @@ createElement( 'div', { id: 'pp-button-block' } )
  * (No live SDK or AJAX here — just a static label.)
  * --------------------------------------------------------------------- */
 function PayphoneEdit() {
-return createElement(
-'div',
-{ className: 'payphone-description' },
-decodeEntities( settings.description || title )
-);
+	return createElement(
+		'div',
+		{ className: 'payphone-description' },
+		decodeEntities( settings.description || title )
+	);
 }
 
 /* -----------------------------------------------------------------------
  * Registration
  * --------------------------------------------------------------------- */
 registerPaymentMethod( {
-name:           'payphone_modal',
-label:          createElement( PayphoneLabel,   null ),
-content:        createElement( PayphoneContent, null ),
-edit:           createElement( PayphoneEdit,    null ),
-canMakePayment: function () { return true; },
-ariaLabel:      title,
-supports: {
-features: settings.supports || [ 'products' ],
-},
+	name:           'payphone_modal',
+	label:          createElement( PayphoneLabel,   null ),
+	content:        createElement( PayphoneContent, null ),
+	edit:           createElement( PayphoneEdit,    null ),
+	canMakePayment: function () { return true; },
+	ariaLabel:      title,
+	supports: {
+		features: settings.supports || [ 'products' ],
+	},
 } );
 }() );
