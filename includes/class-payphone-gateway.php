@@ -48,10 +48,6 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 		// Hook: enqueue frontend scripts only on checkout.
 		add_action( 'wp_enqueue_scripts', array( $this, 'payment_scripts' ) );
 
-		// Add type="module" to our checkout script so it can use a static
-		// import of PPaymentButtonBox directly from the Payphone CDN.
-		add_filter( 'script_loader_tag', array( $this, 'add_module_type_to_script' ), 10, 2 );
-
 		// WC API endpoint: Payphone redirects the browser here after payment.
 		// URL: {home}/wc-api/payphone_cajita/  – configure this in Payphone dashboard.
 		add_action( 'woocommerce_api_payphone_cajita', array( $this, 'handle_response_url' ) );
@@ -186,27 +182,10 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 	// -----------------------------------------------------------------------
 
 	/**
-	 * Add type="module" to the payphone checkout script tag so it can use
-	 * a static ES-module import of PPaymentButtonBox directly from the CDN,
-	 * matching exactly the pattern used in the working test.html.
-	 *
-	 * @param string $tag    Full <script> tag HTML.
-	 * @param string $handle Script handle registered with wp_enqueue_script.
-	 * @return string
-	 */
-	public function add_module_type_to_script( $tag, $handle ) {
-		if ( 'payphone-checkout-js' === $handle ) {
-			return str_replace( ' src=', ' type="module" src=', $tag );
-		}
-		return $tag;
-	}
-
-	/**
-	 * Enqueue the Payphone CDN stylesheet plus our own modal CSS/JS on the
-	 * checkout page. The CDN JS itself is loaded via a <script type="module">
-	 * in output_payphone_module_script() so that its named export
-	 * (PPaymentButtonBox) can be assigned to window and accessed by our classic
-	 * payphone-checkout.js through the global scope.
+	 * Enqueue the Payphone CDN stylesheet plus our own checkout JS on the
+	 * checkout page. The Payphone SDK JS is loaded on-demand via dynamic
+	 * import() inside payphone-checkout.js — no type="module" required on
+	 * the script tag.
 	 */
 	public function payment_scripts() {
 		if ( ! is_checkout() || 'no' === $this->enabled ) {

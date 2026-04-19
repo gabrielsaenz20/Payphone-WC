@@ -1,33 +1,29 @@
 /**
- * Payphone WC – Checkout integration script (ES module)
+ * Payphone WC – Checkout integration script
  *
  * Inline flow:
  *  1. Customer selects Payphone from the WC payment method list.
  *  2. JS reads payment data that PHP embedded in #pp-button's data-payphone
- *     attribute — no AJAX call needed, exactly like test.html.
- *  3. PPaymentButtonBox is rendered inside #pp-button.
- *  4. Customer pays using the Cajita de Pagos.
- *  5. functionResult fires with transactionStatus = 'Approved'.
- *  6. JS fills the two hidden inputs and triggers the WC "Place Order" button.
- *  7. WC validates the form, creates the order, and calls process_payment().
- *  8. process_payment() finds the pre-approved transaction in POST + session,
- *     confirms with Payphone API, marks the order as paid, and returns the
- *     order-received URL.
+ *     attribute (no AJAX needed).
+ *  3. The Payphone CDN SDK is loaded on-demand via dynamic import().
+ *  4. PPaymentButtonBox is rendered inside #pp-button.
+ *  5. Customer pays using the Cajita de Pagos.
+ *  6. functionResult fires with transactionStatus = 'Approved'.
+ *  7. JS fills the two hidden inputs and triggers the WC "Place Order" button.
+ *  8. WC creates the order and calls process_payment().
+ *  9. process_payment() confirms with Payphone API, marks the order as paid.
  *
- * This file is loaded with type="module" (via script_loader_tag filter) so the
- * static CDN import resolves exactly as in the working test.html.
+ * Dynamic import() is used instead of a static top-level import so this file
+ * can be loaded as a plain <script> (no type="module" required).  Dynamic
+ * import() works in any script context in all modern browsers.
  */
 
 /* global jQuery, payphoneParams */
 
-import * as _PayphoneSDK from 'https://cdn.payphonetodoesposible.com/box/v1.1/payphone-payment-box.js';
-
-// Resolve the constructor regardless of whether the module uses a named export
-// (export class PPaymentButtonBox) or a default export (export default class).
-var PPaymentButtonBox = _PayphoneSDK.PPaymentButtonBox || _PayphoneSDK['default'];
-
-(function ($) {
+( function ( $ ) {
 'use strict';
+
+var SDK_URL = 'https://cdn.payphonetodoesposible.com/box/v1.1/payphone-payment-box.js';
 
 /* ------------------------------------------------------------------
  * State
@@ -39,44 +35,39 @@ var ppRendered = false;
  * ------------------------------------------------------------------ */
 
 function isPayphoneSelected() {
-return $('input[name="payment_method"]:checked').val() === payphoneParams.gatewayId;
+return $( 'input[name="payment_method"]:checked' ).val() === payphoneParams.gatewayId;
 }
 
 function showLoading() {
-$('#pp-button').html(
+$( '#pp-button' ).html(
 '<div class="payphone-loading">' + payphoneParams.processingText + '</div>'
 );
 }
 
 function showBoxError( message ) {
 ppRendered = false;
-$('#pp-button').html(
-'<p class="payphone-box-error">' + $('<span>').text(message).html() + '</p>'
+$( '#pp-button' ).html(
+'<p class="payphone-box-error">' + $( '<span>' ).text( message ).html() + '</p>'
 );
 }
 
 function clearBox() {
 ppRendered = false;
-$('#pp-button').empty();
-$('#payphone_transaction_id').val('');
-$('#payphone_client_transaction_id').val('');
+$( '#pp-button' ).empty();
+$( '#payphone_transaction_id' ).val( '' );
+$( '#payphone_client_transaction_id' ).val( '' );
 }
 
 /* ------------------------------------------------------------------
- * Render PPaymentButtonBox from embedded page data
+ * Render PPaymentButtonBox
  * ------------------------------------------------------------------ */
 
 /**
- * Read the payment data embedded by PHP in #pp-button's data-payphone
- * attribute and render the Payphone box immediately — no AJAX needed.
+ * Read payment data from #pp-button's data-payphone attribute and load
+ * the Payphone SDK via dynamic import(), then render the box.
  */
 function maybeRenderBox() {
 if ( ! isPayphoneSelected() || ppRendered ) {
-return;
-}
-
-if ( typeof PPaymentButtonBox !== 'function' ) {
-showBoxError( payphoneParams.errorText );
 return;
 }
 
@@ -92,30 +83,44 @@ showBoxError( payphoneParams.errorText );
 return;
 }
 
-renderBox( data );
+ppRendered = true;
+showLoading();
+
+// Dynamic import() works in any script context (module or classic).
+import( SDK_URL )
+.then( function ( module ) {
+var Box = module.PPaymentButtonBox || module['default'];
+if ( typeof Box !== 'function' ) {
+ppRendered = false;
+showBoxError( payphoneParams.errorText );
+return;
+}
+renderBox( Box, data );
+} )
+.catch( function () {
+ppRendered = false;
+showBoxError( payphoneParams.errorText );
+} );
 }
 
 /**
  * Instantiate PPaymentButtonBox and render it into #pp-button.
  *
- * @param {Object} data Payment parameters (from data-payphone attribute).
+ * @param {Function} Box  PPaymentButtonBox constructor.
+ * @param {Object}   data Payment parameters.
  */
-function renderBox( data ) {
-if ( ppRendered ) {
-return;
-}
-
+function renderBox( Box, data ) {
 var container = document.getElementById( 'pp-button' );
 if ( ! container ) {
+ppRendered = false;
 return;
 }
 
-ppRendered = true;
 $( '#pp-button' ).empty();
 
 /* eslint-disable no-new */
 try {
-new PPaymentButtonBox({
+new Box( {
 token:               data.token,
 amount:              data.amount,
 amountWithoutTax:    data.amountWithoutTax,
@@ -134,14 +139,11 @@ responseUrl:         data.responseUrl,
  * Called by the Payphone box when the transaction finishes.
  *
  * @param {Object} result
- * @param {string} result.transactionStatus  e.g. 'Approved'
- * @param {number} result.transactionId      Payphone transaction ID
- * @param {string} result.clientTransactionId Our client ID
  */
-functionResult: function (result) {
+functionResult: function ( result ) {
 handleResult( result, data.clientTransactionId );
 },
-}).render( 'pp-button' );
+} ).render( 'pp-button' );
 } catch ( e ) {
 ppRendered = false;
 showBoxError( payphoneParams.errorText );
@@ -156,14 +158,8 @@ showBoxError( payphoneParams.errorText );
 /**
  * Handle the result returned by PPaymentButtonBox.
  *
- * On Approved: store transaction IDs in hidden inputs, submit the WC
- * checkout form. process_payment() will confirm the transaction and
- * mark the order as paid.
- *
- * On failure/cancel: show an error and allow the customer to retry.
- *
- * @param {Object} result              Payphone result.
- * @param {string} fallbackClientTxnId Fallback clientTransactionId.
+ * @param {Object} result              Payphone result object.
+ * @param {string} fallbackClientTxnId Our clientTransactionId fallback.
  */
 function handleResult( result, fallbackClientTxnId ) {
 if ( ! result || result.transactionStatus !== 'Approved' ) {
@@ -182,7 +178,6 @@ result.clientTransactionId || fallbackClientTxnId
 );
 
 showLoading();
-
 $( 'form.checkout, form.woocommerce-checkout' ).first().unblock();
 
 // Trigger Place Order — WC creates the order, then calls process_payment().
@@ -222,10 +217,10 @@ maybeRenderBox();
 } );
 
 /* ------------------------------------------------------------------
- * Fallback: hash-change flow (block checkout / JS errors)
+ * Fallback: hash-change flow
  * ------------------------------------------------------------------ */
 
-$( document.body ).on( 'checkout_place_order_success', function (event, response) {
+$( document.body ).on( 'checkout_place_order_success', function ( event, response ) {
 if (
 response &&
 response.redirect &&
@@ -233,7 +228,6 @@ response.redirect.indexOf( '#payphone-modal-open' ) !== -1
 ) {
 $( 'form.checkout' ).unblock();
 $( 'form.woocommerce-checkout' ).unblock();
-
 ppRendered = false;
 if ( isPayphoneSelected() ) {
 maybeRenderBox();
@@ -260,4 +254,4 @@ maybeRenderBox();
 }
 } );
 
-}( jQuery ));
+}( jQuery ) );
