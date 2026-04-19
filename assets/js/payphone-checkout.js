@@ -16,7 +16,7 @@
  * Fallback (hash-change) flow is preserved for block checkout / JS failures.
  */
 
-/* global jQuery, payphoneParams, PPaymentButtonBox */
+/* global jQuery, payphoneParams */
 
 (function ($) {
 	'use strict';
@@ -94,33 +94,36 @@
 	}
 
 	/**
-	 * PPaymentButtonBox is an ES module that may finish loading slightly after
-	 * our script. Poll until the constructor is available (max 5 s).
+	 * Load the Payphone CDN module via dynamic import() and render the box.
+	 * Dynamic import() works in regular (non-module) scripts in all modern
+	 * browsers and correctly exposes named ES module exports.
 	 *
 	 * @param {Object} data Payment parameters returned by the AJAX handler.
 	 */
 	function waitForConstructor( data ) {
-		var attempts = 0;
-
-		var interval = setInterval(function () {
-			attempts++;
-
-			if ( typeof PPaymentButtonBox !== 'undefined' ) {
-				clearInterval(interval);
-				renderBox(data);
-			} else if ( attempts >= 50 ) {
-				clearInterval(interval);
+		/* global import */
+		// eslint-disable-next-line no-undef
+		import(payphoneParams.cdnJs)
+			.then(function (module) {
+				var Constructor = module.PPaymentButtonBox || module['default'];
+				if ( typeof Constructor !== 'function' ) {
+					showBoxError(payphoneParams.errorText);
+					return;
+				}
+				renderBox(data, Constructor);
+			})
+			['catch'](function () {
 				showBoxError(payphoneParams.errorText);
-			}
-		}, 100);
+			});
 	}
 
 	/**
 	 * Instantiate PPaymentButtonBox and render it into #pp-button.
 	 *
-	 * @param {Object} data Payment parameters.
+	 * @param {Object}   data        Payment parameters.
+	 * @param {Function} Constructor PPaymentButtonBox constructor from the CDN module.
 	 */
-	function renderBox( data ) {
+	function renderBox( data, Constructor ) {
 		if ( ppRendered ) {
 			return;
 		}
@@ -129,7 +132,7 @@
 		$('#pp-button').empty();
 
 		/* eslint-disable no-new */
-		new PPaymentButtonBox({
+		new Constructor({
 			token:               data.token,
 			amount:              data.amount,
 			amountWithoutTax:    data.amountWithoutTax,
@@ -212,8 +215,20 @@
 	/**
 	 * Render the box immediately when Payphone is selected.
 	 * Clear the box when any other method is selected.
+	 *
+	 * We listen to both the WooCommerce `payment_method_selected` event and the
+	 * native `change` event on the radio buttons, because some themes/plugins
+	 * trigger one but not the other.
 	 */
 	$(document.body).on('payment_method_selected', function () {
+		if ( isPayphoneSelected() ) {
+			maybeRenderBox();
+		} else {
+			clearBox();
+		}
+	});
+
+	$(document).on('change', 'input[name="payment_method"]', function () {
 		if ( isPayphoneSelected() ) {
 			maybeRenderBox();
 		} else {

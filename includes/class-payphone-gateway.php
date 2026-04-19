@@ -48,9 +48,6 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 		// Hook: enqueue frontend scripts only on checkout.
 		add_action( 'wp_enqueue_scripts', array( $this, 'payment_scripts' ) );
 
-		// Add type="module" to the Payphone CDN script tag (ES module).
-		add_filter( 'script_loader_tag', array( $this, 'add_module_type_attribute' ), 10, 2 );
-
 		// WC API endpoint: Payphone redirects the browser here after payment.
 		// URL: {home}/wc-api/payphone_cajita/  – configure this in Payphone dashboard.
 		add_action( 'woocommerce_api_payphone_cajita', array( $this, 'handle_response_url' ) );
@@ -82,22 +79,6 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 		echo '<input type="hidden" name="payphone_client_transaction_id" id="payphone_client_transaction_id" value="">';
 
 		echo '<div id="pp-button"></div>';
-	}
-
-	/**
-	 * Inject type="module" on the Payphone CDN script tag so the browser
-	 * treats it as an ES module (required for PPaymentButtonBox to be exported).
-	 *
-	 * @param string $tag    Full <script> tag HTML.
-	 * @param string $handle Script handle.
-	 * @return string Modified tag.
-	 */
-	public function add_module_type_attribute( $tag, $handle ) {
-		if ( 'payphone-box-js' === $handle ) {
-			// Only replace the first occurrence to avoid duplication.
-			return preg_replace( '/<script\s/', '<script type="module" ', $tag, 1 );
-		}
-		return $tag;
 	}
 
 	// -----------------------------------------------------------------------
@@ -176,6 +157,12 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 	/**
 	 * Enqueue the Payphone CDN files plus our own modal CSS/JS on the
 	 * checkout page.
+	 *
+	 * The Payphone JS is loaded as an ES module via dynamic import() inside
+	 * payphone-checkout.js rather than as a WordPress-enqueued script, because
+	 * WordPress cannot reliably add type="module" to script tags and ES module
+	 * exports are not accessible as globals. The CDN URL is passed via
+	 * payphoneParams so the JS can import it at runtime.
 	 */
 	public function payment_scripts() {
 		if ( ! is_checkout() || 'no' === $this->enabled ) {
@@ -188,18 +175,6 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 			'https://cdn.payphonetodoesposible.com/box/v1.1/payphone-payment-box.css',
 			array(),
 			null
-		);
-
-		/*
-		 * Payphone CDN – ES-module script.
-		 * The type="module" attribute is injected by add_module_type_attribute().
-		 */
-		wp_enqueue_script(
-			'payphone-box-js',
-			'https://cdn.payphonetodoesposible.com/box/v1.1/payphone-payment-box.js',
-			array(),
-			null,
-			true
 		);
 
 		// Our modal stylesheet.
@@ -227,6 +202,8 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 				'ajaxUrl'        => admin_url( 'admin-ajax.php' ),
 				'nonce'          => wp_create_nonce( 'payphone_nonce' ),
 				'gatewayId'      => $this->id,
+				// CDN JS URL: imported dynamically inside payphone-checkout.js.
+				'cdnJs'          => 'https://cdn.payphonetodoesposible.com/box/v1.1/payphone-payment-box.js',
 				'errorText'      => __( 'Ocurrió un error al procesar el pago. Por favor intenta de nuevo.', 'payphone-wc-modal' ),
 				'processingText' => __( 'Procesando pago…', 'payphone-wc-modal' ),
 			)
