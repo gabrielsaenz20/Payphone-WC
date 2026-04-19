@@ -258,13 +258,32 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 	public function process_payment( $order_id ) {
 		$order = wc_get_order( $order_id );
 
-		// ---- Inline flow: payment was approved before form submission -------
+		// ---- Inline / Blocks flow: payment was approved before form submission -
+		// Classic checkout: transaction IDs come from hidden form inputs ($_POST).
+		// Blocks checkout:  WC Blocks injects paymentMethodData into $_POST
+		//                   before calling process_payment(). If that shim is
+		//                   not present (older WC Blocks), fall back to
+		//                   WC()->payment_method_data which Blocks sets directly.
 		$pp_txn_id    = isset( $_POST['payphone_transaction_id'] )
 			? sanitize_text_field( wp_unslash( $_POST['payphone_transaction_id'] ) )
 			: '';
 		$pp_client_id = isset( $_POST['payphone_client_transaction_id'] )
 			? sanitize_text_field( wp_unslash( $_POST['payphone_client_transaction_id'] ) )
 			: '';
+
+		// Fallback: WC Blocks may expose paymentMethodData via WC()->payment_method_data.
+		if ( ( ! $pp_txn_id || ! $pp_client_id )
+			&& isset( WC()->payment_method_data )
+			&& is_array( WC()->payment_method_data )
+		) {
+			$pmd = WC()->payment_method_data;
+			if ( ! $pp_txn_id && isset( $pmd['payphone_transaction_id'] ) ) {
+				$pp_txn_id = sanitize_text_field( $pmd['payphone_transaction_id'] );
+			}
+			if ( ! $pp_client_id && isset( $pmd['payphone_client_transaction_id'] ) ) {
+				$pp_client_id = sanitize_text_field( $pmd['payphone_client_transaction_id'] );
+			}
+		}
 
 		if ( $pp_txn_id && is_numeric( $pp_txn_id ) && $pp_client_id ) {
 			// Verify clientTransactionId against the session to prevent replays.

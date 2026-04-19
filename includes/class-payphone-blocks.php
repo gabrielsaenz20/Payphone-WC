@@ -68,6 +68,11 @@ class Payphone_WC_Blocks extends AbstractPaymentMethodType {
 	 * Return data that will be available to the frontend blocks JS via
 	 * `getSetting('payphone_modal_data', {})`.
 	 *
+	 * Includes the AJAX URL and a nonce so the blocks JS can call the
+	 * `payphone_get_cart_payment_data` action to fetch fresh payment data
+	 * (token, amounts, clientTransactionId) from the server. This mirrors
+	 * what `payment_fields()` does for the classic checkout.
+	 *
 	 * @return array
 	 */
 	public function get_payment_method_data() {
@@ -77,6 +82,9 @@ class Payphone_WC_Blocks extends AbstractPaymentMethodType {
 				: __( 'Payphone', 'payphone-wc-modal' ),
 			'description' => isset( $this->settings['description'] ) ? $this->settings['description'] : '',
 			'supports'    => array( 'products' ),
+			'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
+			'nonce'       => wp_create_nonce( 'payphone_nonce' ),
+			'errorText'   => __( 'Completa el pago con Payphone antes de continuar.', 'payphone-wc-modal' ),
 		);
 	}
 }

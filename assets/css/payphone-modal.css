@@ -20,7 +20,8 @@
 }
 
 /* ---- Payphone box container --------------------------------------------- */
-#pp-button {
+#pp-button,
+#pp-button-block {
 	min-height: 60px;
 	position: relative;
 }
