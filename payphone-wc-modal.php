@@ -63,6 +63,10 @@ add_action( 'plugins_loaded', function () {
 		return $gateways;
 	} );
 
+	// AJAX: retrieve payment data from cart (no order created) for inline box.
+	add_action( 'wp_ajax_payphone_get_cart_payment_data', 'payphone_wc_get_cart_payment_data' );
+	add_action( 'wp_ajax_nopriv_payphone_get_cart_payment_data', 'payphone_wc_get_cart_payment_data' );
+
 	// AJAX: retrieve stored payment data so the modal can initialise the box.
 	add_action( 'wp_ajax_payphone_get_payment_data', 'payphone_wc_get_payment_data' );
 	add_action( 'wp_ajax_nopriv_payphone_get_payment_data', 'payphone_wc_get_payment_data' );
@@ -89,6 +93,63 @@ add_action( 'plugins_loaded', function () {
 // ---------------------------------------------------------------------------
 // AJAX Handlers
 // ---------------------------------------------------------------------------
+
+/**
+ * Return payment parameters derived from the current WC cart so the inline
+ * PPaymentButtonBox can be rendered as soon as Payphone is selected — before
+ * the WC order is created.
+ *
+ * A temporary clientTransactionId is generated and stored in the WC session.
+ * process_payment() later verifies this ID against the session when the WC
+ * form is submitted after the customer approves the payment.
+ */
+function payphone_wc_get_cart_payment_data() {
+	check_ajax_referer( 'payphone_nonce', 'nonce' );
+
+	if ( ! WC()->cart ) {
+		wp_send_json_error( array( 'message' => __( 'Carrito no disponible.', 'payphone-wc-modal' ) ) );
+		return;
+	}
+
+	$cart = WC()->cart;
+
+	// Recalculate to make sure totals are up to date.
+	$cart->calculate_totals();
+
+	$total_cents  = (int) round( $cart->get_total( 'edit' ) * 100 );
+	$tax_cents    = (int) round( $cart->get_total_tax() * 100 );
+	$pretax_cents = max( 0, $total_cents - $tax_cents );
+
+	if ( $total_cents <= 0 ) {
+		wp_send_json_error( array( 'message' => __( 'El carrito está vacío o el total es inválido.', 'payphone-wc-modal' ) ) );
+		return;
+	}
+
+	$gateway = new Payphone_WC_Gateway();
+
+	$client_transaction_id = 'WC-INLINE-' . time() . '-' . wp_rand( 1000, 9999 );
+
+	$payment_data = array(
+		'token'               => $gateway->get_option( 'token' ),
+		'amount'              => $total_cents,
+		'amountWithoutTax'    => $pretax_cents,
+		'amountWithTax'       => 0,
+		'tax'                 => $tax_cents,
+		'service'             => 0,
+		'tip'                 => 0,
+		'storeId'             => $gateway->get_option( 'store_id' ),
+		'reference'           => $gateway->get_option( 'reference', __( 'Compra en tienda', 'payphone-wc-modal' ) ),
+		'currency'            => get_woocommerce_currency(),
+		'clientTransactionId' => $client_transaction_id,
+		'backgroundColor'     => $gateway->get_option( 'bg_color', '#6610f2' ),
+		'responseUrl'         => WC()->api_request_url( 'payphone_cajita' ),
+	);
+
+	// Persist so process_payment() can verify the clientTransactionId.
+	WC()->session->set( 'payphone_cart_payment_data', $payment_data );
+
+	wp_send_json_success( $payment_data );
+}
 
 /**
  * Return the payment data stored in the WC session so the JS modal can

@@ -63,20 +63,25 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 	/**
 	 * Output the payment fields HTML for the classic WooCommerce checkout.
 	 *
-	 * Renders the gateway description (if any) followed by a prominent
-	 * "Pagar con Payphone" button. Clicking that button programmatically
-	 * triggers the standard WC "Place Order" submit so the order is created
-	 * and our modal is opened, without the customer needing to scroll down to
-	 * the separate "Place Order" button at the bottom of the form.
+	 * Renders the integration heading, two hidden inputs that carry the
+	 * pre-approved Payphone transaction back to process_payment(), and the
+	 * #pp-button container where PPaymentButtonBox renders automatically as
+	 * soon as the customer selects Payphone.
 	 */
 	public function payment_fields() {
 		if ( $this->description ) {
 			echo '<p class="payphone-description">' . esc_html( $this->description ) . '</p>';
 		}
 
-		echo '<button type="button" id="payphone-pay-button" class="payphone-pay-btn">'
-			. esc_html__( 'Pagar con Payphone', 'payphone-wc-modal' )
-			. '</button>';
+		echo '<h2 class="payphone-box-heading">'
+			. esc_html__( 'Integración de Cajita de Pagos', 'payphone-wc-modal' )
+			. '</h2>';
+
+		// Hidden inputs carry the Payphone transaction IDs to process_payment().
+		echo '<input type="hidden" name="payphone_transaction_id" id="payphone_transaction_id" value="">';
+		echo '<input type="hidden" name="payphone_client_transaction_id" id="payphone_client_transaction_id" value="">';
+
+		echo '<div id="pp-button"></div>';
 	}
 
 	/**
@@ -222,8 +227,6 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 				'ajaxUrl'        => admin_url( 'admin-ajax.php' ),
 				'nonce'          => wp_create_nonce( 'payphone_nonce' ),
 				'gatewayId'      => $this->id,
-				'sectionTitle'   => __( 'Cajita de Pagos Payphone', 'payphone-wc-modal' ),
-				'cancelText'     => __( 'Cancelar Pago', 'payphone-wc-modal' ),
 				'errorText'      => __( 'Ocurrió un error al procesar el pago. Por favor intenta de nuevo.', 'payphone-wc-modal' ),
 				'processingText' => __( 'Procesando pago…', 'payphone-wc-modal' ),
 			)
@@ -238,11 +241,18 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 	 * Called by WooCommerce when the customer submits the checkout form with
 	 * Payphone selected.
 	 *
-	 * Instead of charging the card here, we:
-	 *  1. Store the order amounts + Payphone credentials in the WC session.
-	 *  2. Return a "redirect" to a URL hash (#payphone-modal-open) so the
-	 *     browser stays on the checkout page.
-	 *  3. Our JS detects the hash and opens the Payphone modal.
+	 * Inline flow (primary):
+	 *  The customer already approved the payment in the PPaymentButtonBox
+	 *  before the form was submitted. The JS fills two hidden fields
+	 *  (payphone_transaction_id and payphone_client_transaction_id) and then
+	 *  triggers the Place Order button. We verify the clientTransactionId
+	 *  against the WC session, call Payphone Confirm API, and mark the order
+	 *  as paid immediately.
+	 *
+	 * Fallback flow:
+	 *  If the hidden fields are absent (e.g. block checkout, JS failure) we
+	 *  store the order amounts in the WC session and return a hash redirect
+	 *  so our JS can open the Payphone box after order creation.
 	 *
 	 * @param int $order_id WooCommerce order ID.
 	 * @return array WC redirect result.
@@ -250,22 +260,94 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 	public function process_payment( $order_id ) {
 		$order = wc_get_order( $order_id );
 
+		// ---- Inline flow: payment was approved before form submission -------
+		$pp_txn_id    = isset( $_POST['payphone_transaction_id'] )
+			? sanitize_text_field( wp_unslash( $_POST['payphone_transaction_id'] ) )
+			: '';
+		$pp_client_id = isset( $_POST['payphone_client_transaction_id'] )
+			? sanitize_text_field( wp_unslash( $_POST['payphone_client_transaction_id'] ) )
+			: '';
+
+		if ( $pp_txn_id && is_numeric( $pp_txn_id ) && $pp_client_id ) {
+			// Verify clientTransactionId against the session to prevent replays.
+			$cart_data = WC()->session->get( 'payphone_cart_payment_data' );
+
+			if ( ! $cart_data || ! isset( $cart_data['clientTransactionId'] ) ||
+				! hash_equals( $cart_data['clientTransactionId'], $pp_client_id ) ) {
+				wc_add_notice(
+					__( 'Datos de transacción inválidos. Por favor intenta de nuevo.', 'payphone-wc-modal' ),
+					'error'
+				);
+				return array( 'result' => 'failure' );
+			}
+
+			// Confirm with Payphone API.
+			$token    = $this->get_option( 'token' );
+			$response = wp_remote_post(
+				'https://pay.payphone.app/api/button/V2/confirm',
+				array(
+					'headers' => array(
+						'Authorization' => 'Bearer ' . $token,
+						'Content-Type'  => 'application/json',
+					),
+					'body'    => wp_json_encode(
+						array(
+							'id'                  => (int) $pp_txn_id,
+							'clientTransactionId' => $pp_client_id,
+						)
+					),
+					'timeout' => 30,
+				)
+			);
+
+			if ( is_wp_error( $response ) ) {
+				$order->update_status( 'failed', $response->get_error_message() );
+				wc_add_notice(
+					__( 'Error al confirmar el pago con Payphone. Por favor intenta de nuevo.', 'payphone-wc-modal' ),
+					'error'
+				);
+				return array( 'result' => 'failure' );
+			}
+
+			$body   = json_decode( wp_remote_retrieve_body( $response ), true );
+			$status = isset( $body['transactionStatus'] ) ? $body['transactionStatus'] : '';
+
+			if ( 'Approved' === $status ) {
+				$order->payment_complete( $pp_txn_id );
+				$order->add_order_note(
+					sprintf(
+						/* translators: %s: Payphone transaction ID */
+						__( 'Pago aprobado por Payphone (cajita inline). ID de transacción: %s', 'payphone-wc-modal' ),
+						esc_html( $pp_txn_id )
+					)
+				);
+
+				WC()->session->set( 'payphone_cart_payment_data', null );
+				WC()->cart->empty_cart();
+
+				return array(
+					'result'   => 'success',
+					'redirect' => $order->get_checkout_order_received_url(),
+				);
+			}
+
+			$order->update_status( 'failed', __( 'Pago no aprobado por Payphone.', 'payphone-wc-modal' ) );
+			wc_add_notice(
+				isset( $body['message'] )
+					? sanitize_text_field( $body['message'] )
+					: __( 'El pago no fue aprobado. Por favor intenta de nuevo.', 'payphone-wc-modal' ),
+				'error'
+			);
+			return array( 'result' => 'failure' );
+		}
+
+		// ---- Fallback flow: store data in session, JS opens box after submit -
+
 		// ---- Amount calculation (Payphone expects integers in cents) --------
 		$total_cents  = (int) round( $order->get_total() * 100 );
 		$tax_cents    = (int) round( $order->get_total_tax() * 100 );
-		$pretax_cents = max( 0, $total_cents - $tax_cents ); // Base before tax, clamped to ≥ 0.
+		$pretax_cents = max( 0, $total_cents - $tax_cents );
 
-		/*
-		 * Payphone fields:
-		 *  amount            = total (cents)
-		 *  amountWithoutTax  = untaxed base (cents)
-		 *  amountWithTax     = taxable base (cents)  — 0 when items are all taxed
-		 *  tax               = IVA amount (cents)
-		 *
-		 * For maximum compatibility across different store tax configurations
-		 * we treat the entire pre-tax amount as "untaxed base" and pass the IVA
-		 * separately. The totals always balance: pretax + 0 + tax = total.
-		 */
 		$amount_without_tax = $pretax_cents;
 		$amount_with_tax    = 0;
 
@@ -285,8 +367,6 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 			'currency'            => get_woocommerce_currency(),
 			'clientTransactionId' => $client_transaction_id,
 			'backgroundColor'     => $this->get_option( 'bg_color', '#6610f2' ),
-			// responseUrl: Payphone redirects the browser here after payment.
-			// Configured in Payphone dashboard as: {home}/wc-api/payphone_cajita/
 			'responseUrl'         => WC()->api_request_url( 'payphone_cajita' ),
 		);
 
@@ -294,28 +374,8 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 		WC()->session->set( 'payphone_order_id', $order_id );
 		WC()->session->set( 'payphone_payment_data', $payment_data );
 
-		/*
-		 * Mark the order as pending.
-		 *
-		 * We intentionally do NOT empty the cart or reduce stock here.
-		 * Emptying the cart before the customer actually pays causes
-		 * WooCommerce's frontend JS to detect the empty cart and redirect
-		 * the browser to the cart/shop page – which prevents the Payphone
-		 * modal from ever opening.
-		 *
-		 * The cart is emptied naturally when the customer reaches the
-		 * order-received (thank-you) page after a confirmed payment.
-		 * Stock levels are reduced automatically by WooCommerce when
-		 * payment_complete() is called (via the
-		 * woocommerce_payment_complete hook chain).
-		 */
 		$order->update_status( 'pending', __( 'Esperando confirmación de pago de Payphone.', 'payphone-wc-modal' ) );
 
-		/*
-		 * Returning '#payphone-modal-open' as the redirect URL causes the WC JS
-		 * to do `window.location = '#payphone-modal-open'`, which is a hash
-		 * change — the checkout page stays loaded and our JS opens the modal.
-		 */
 		return array(
 			'result'   => 'success',
 			'redirect' => '#payphone-modal-open',

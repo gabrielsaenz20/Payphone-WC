@@ -1,30 +1,27 @@
 /* ==========================================================================
-   Payphone WC – Inline payment section styles
+   Payphone WC – Inline payment box styles (inside WC payment_fields)
    ========================================================================== */
 
-/* ---- Inline payment section container ---------------------------------- */
-#payphone-payment-section {
-	margin: 24px 0;
-	padding: 24px 20px;
-	background: #ffffff;
-	border: 1px solid #e5e7eb;
-	border-radius: 12px;
-	box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-	box-sizing: border-box;
-}
-
-/* ---- Section title ----------------------------------------------------- */
-.payphone-section-title {
-	margin: 0 0 20px;
-	font-size: 1.25rem;
+/* ---- Heading shown when Payphone is selected ---------------------------- */
+.payphone-box-heading {
+	margin: 12px 0 16px;
+	font-size: 1.1rem;
 	font-weight: 700;
 	color: #1a1a1a;
 	line-height: 1.3;
 }
 
-/* ---- Payphone box area -------------------------------------------------- */
+/* ---- Description text --------------------------------------------------- */
+.payphone-description {
+	margin-bottom: 10px;
+	font-size: 0.9rem;
+	color: #555;
+	line-height: 1.5;
+}
+
+/* ---- Payphone box container --------------------------------------------- */
 #pp-button {
-	min-height: 80px;
+	min-height: 60px;
 	position: relative;
 }
 
@@ -34,7 +31,7 @@
 	align-items: center;
 	justify-content: center;
 	gap: 10px;
-	padding: 30px 0;
+	padding: 24px 0;
 	color: #666;
 	font-size: 0.9rem;
 }
@@ -42,8 +39,8 @@
 .payphone-loading::before {
 	content: '';
 	display: inline-block;
-	width: 22px;
-	height: 22px;
+	width: 20px;
+	height: 20px;
 	border: 3px solid #d1d5db;
 	border-top-color: #6610f2;
 	border-radius: 50%;
@@ -56,7 +53,7 @@
 	}
 }
 
-/* ---- Error notice inside payment section ------------------------------- */
+/* ---- Error notice ------------------------------------------------------- */
 .payphone-box-error {
 	background: #fef2f2;
 	border: 1px solid #fecaca;
@@ -66,74 +63,4 @@
 	font-size: 0.875rem;
 	line-height: 1.5;
 	margin-top: 8px;
-}
-
-/* ---- Cancel button ----------------------------------------------------- */
-.payphone-cancel-btn {
-	display: inline-block;
-	margin-top: 16px;
-	padding: 8px 20px;
-	background: transparent;
-	border: 1px solid #d63638;
-	border-radius: 6px;
-	color: #d63638;
-	font-size: 0.85rem;
-	cursor: pointer;
-	transition: background 0.2s, color 0.2s;
-	line-height: 1.4;
-}
-
-.payphone-cancel-btn:hover,
-.payphone-cancel-btn:focus {
-	background: #d63638;
-	color: #ffffff;
-	outline: none;
-}
-
-/* ==========================================================================
-   Payphone "Pagar con Payphone" button – classic checkout payment fields
-   ========================================================================== */
-
-.payphone-description {
-	margin-bottom: 14px;
-	font-size: 0.9rem;
-	color: #555;
-	line-height: 1.5;
-}
-
-.payphone-pay-btn {
-	display: inline-flex;
-	align-items: center;
-	gap: 8px;
-	padding: 11px 24px;
-	background: #00adef;
-	color: #ffffff;
-	border: none;
-	border-radius: 8px;
-	font-size: 1rem;
-	font-weight: 600;
-	cursor: pointer;
-	transition: background 0.2s, box-shadow 0.2s;
-	box-shadow: 0 2px 8px rgba(0, 173, 239, 0.35);
-	line-height: 1.3;
-}
-
-.payphone-pay-btn:hover,
-.payphone-pay-btn:focus {
-	background: #0094cc;
-	box-shadow: 0 4px 14px rgba(0, 173, 239, 0.45);
-	outline: none;
-}
-
-.payphone-pay-btn:active {
-	background: #007baa;
-	box-shadow: none;
-}
-
-/* ---- Responsive tweaks ------------------------------------------------- */
-@media (max-width: 480px) {
-	#payphone-payment-section {
-		padding: 18px 14px;
-		border-radius: 8px;
-	}
 }
