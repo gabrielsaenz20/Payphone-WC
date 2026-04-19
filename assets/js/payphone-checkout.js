@@ -270,9 +270,9 @@
 
 	/**
 	 * WooCommerce fires `checkout_place_order_success` on the document body
-	 * after a successful AJAX order creation.  We intercept the response here:
-	 * if the redirect is our magic hash we open the Payphone modal instead of
-	 * letting WC navigate away.
+	 * after a successful AJAX order creation (classic checkout).  We intercept
+	 * the response here: if the redirect is our magic hash we open the Payphone
+	 * modal instead of letting WC navigate away.
 	 */
 	$(document.body).on('checkout_place_order_success', function (event, response) {
 		if (
@@ -284,6 +284,20 @@
 			$('form.checkout').unblock();
 			$('form.woocommerce-checkout').unblock();
 
+			openModal();
+			fetchDataAndRenderBox();
+		}
+	});
+
+	/**
+	 * Block-based checkout (WC 7.6+) redirects the browser to the URL
+	 * returned by process_payment(). Since that URL is a hash-only value
+	 * (`#payphone-modal-open`), no full navigation occurs – only a hashchange
+	 * event fires. We listen for it here so the modal opens in both classic
+	 * and block checkout.
+	 */
+	window.addEventListener('hashchange', function () {
+		if ( window.location.hash === '#payphone-modal-open' && ! isModalOpen ) {
 			openModal();
 			fetchDataAndRenderBox();
 		}
