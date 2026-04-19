@@ -1,71 +1,40 @@
 /* ==========================================================================
-   Payphone WC Modal – Modal overlay styles
+   Payphone WC – Inline payment section styles
    ========================================================================== */
 
-/* ---- Overlay ------------------------------------------------------------ */
-#payphone-modal-overlay {
-	display: none;
-	position: fixed;
-	inset: 0;
-	background: rgba(0, 0, 0, 0.65);
-	z-index: 99998;
-	-webkit-backdrop-filter: blur(2px);
-	backdrop-filter: blur(2px);
-}
-
-/* ---- Modal container ---------------------------------------------------- */
-#payphone-modal {
-	display: none;
-	position: fixed;
-	top: 50%;
-	left: 50%;
-	transform: translate(-50%, -50%);
-	z-index: 99999;
+/* ---- Inline payment section container ---------------------------------- */
+#payphone-payment-section {
+	margin: 24px 0;
+	padding: 24px 20px;
 	background: #ffffff;
+	border: 1px solid #e5e7eb;
 	border-radius: 12px;
-	box-shadow: 0 8px 40px rgba(0, 0, 0, 0.28);
-	padding: 24px 20px 20px;
-	width: 90%;
-	max-width: 480px;
-	max-height: 90vh;
-	overflow-y: auto;
+	box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 	box-sizing: border-box;
 }
 
-/* ---- Close button ------------------------------------------------------- */
-#payphone-modal-close {
-	display: block;
-	margin: 0 0 16px auto;
-	padding: 6px 16px;
-	background: transparent;
-	border: 1px solid #d63638;
-	border-radius: 6px;
-	color: #d63638;
-	font-size: 0.85rem;
-	cursor: pointer;
-	transition: background 0.2s, color 0.2s;
-	line-height: 1.4;
+/* ---- Section title ----------------------------------------------------- */
+.payphone-section-title {
+	margin: 0 0 20px;
+	font-size: 1.25rem;
+	font-weight: 700;
+	color: #1a1a1a;
+	line-height: 1.3;
 }
 
-#payphone-modal-close:hover,
-#payphone-modal-close:focus {
-	background: #d63638;
-	color: #ffffff;
-	outline: none;
-}
-
-/* ---- Loading state inside the box area ---------------------------------- */
+/* ---- Payphone box area -------------------------------------------------- */
 #pp-button {
 	min-height: 80px;
 	position: relative;
 }
 
+/* ---- Loading state ----------------------------------------------------- */
 .payphone-loading {
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	gap: 10px;
-	padding: 20px 0;
+	padding: 30px 0;
 	color: #666;
 	font-size: 0.9rem;
 }
@@ -73,9 +42,9 @@
 .payphone-loading::before {
 	content: '';
 	display: inline-block;
-	width: 20px;
-	height: 20px;
-	border: 3px solid #ccc;
+	width: 22px;
+	height: 22px;
+	border: 3px solid #d1d5db;
 	border-top-color: #6610f2;
 	border-radius: 50%;
 	animation: payphone-spin 0.7s linear infinite;
@@ -87,8 +56,8 @@
 	}
 }
 
-/* ---- Error notice inside modal ------------------------------------------ */
-.payphone-modal-error {
+/* ---- Error notice inside payment section ------------------------------- */
+.payphone-box-error {
 	background: #fef2f2;
 	border: 1px solid #fecaca;
 	border-radius: 6px;
@@ -99,12 +68,26 @@
 	margin-top: 8px;
 }
 
-/* ---- Responsive tweaks -------------------------------------------------- */
-@media (max-width: 480px) {
-	#payphone-modal {
-		padding: 18px 14px 16px;
-		border-radius: 8px;
-	}
+/* ---- Cancel button ----------------------------------------------------- */
+.payphone-cancel-btn {
+	display: inline-block;
+	margin-top: 16px;
+	padding: 8px 20px;
+	background: transparent;
+	border: 1px solid #d63638;
+	border-radius: 6px;
+	color: #d63638;
+	font-size: 0.85rem;
+	cursor: pointer;
+	transition: background 0.2s, color 0.2s;
+	line-height: 1.4;
+}
+
+.payphone-cancel-btn:hover,
+.payphone-cancel-btn:focus {
+	background: #d63638;
+	color: #ffffff;
+	outline: none;
 }
 
 /* ==========================================================================
@@ -145,4 +128,12 @@
 .payphone-pay-btn:active {
 	background: #007baa;
 	box-shadow: none;
+}
+
+/* ---- Responsive tweaks ------------------------------------------------- */
+@media (max-width: 480px) {
+	#payphone-payment-section {
+		padding: 18px 14px;
+		border-radius: 8px;
+	}
 }

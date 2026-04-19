@@ -1,19 +1,21 @@
 /**
- * Payphone WC Modal – Checkout integration script
+ * Payphone WC – Checkout integration script
  *
  * Flow:
  *  1. Customer fills the WC checkout form and selects Payphone.
- *  2. WC submits the form via AJAX → server creates the order and returns
+ *  2. Clicks "Pagar con Payphone" → triggers the standard WC "Place Order"
+ *     AJAX submission.
+ *  3. Server creates the order and returns
  *     { result: 'success', redirect: '#payphone-modal-open' }.
- *  3. WC JS sets window.location = '#payphone-modal-open' (hash change only –
- *     the page stays loaded).
- *  4. We detect the hash change via the `checkout_place_order_success` event
- *     and fetch the payment data from the WC session (AJAX).
- *  5. We open the modal and render the Payphone Cajita de Pagos.
- *  6. PPaymentButtonBox fires `functionResult` when payment completes.
- *  7. We confirm server-side (Payphone Confirm API) via AJAX.
- *  8. On success → redirect to the WC order-received page.
- *     On failure → show error, close modal so the customer can retry.
+ *  4. We intercept via `checkout_place_order_success` (classic) or a
+ *     hashchange event (block checkout).
+ *  5. The checkout form is hidden and the inline Payphone payment section
+ *     is revealed on the same page.
+ *  6. We fetch payment data from the WC session (AJAX) and render
+ *     PPaymentButtonBox into #pp-button.
+ *  7. PPaymentButtonBox fires `functionResult` when the transaction finishes.
+ *  8. On Approved → confirm server-side → redirect to order-received page.
+ *     On failure/cancel → restore the checkout form so the customer can retry.
  */
 
 /* global jQuery, payphoneParams, PPaymentButtonBox */
@@ -24,64 +26,84 @@
 	/* ------------------------------------------------------------------
 	 * State
 	 * ------------------------------------------------------------------ */
-	var isModalOpen    = false;
-	var ppBoxRendered  = false;
+	var isBoxOpen    = false;
+	var ppBoxRendered = false;
 
 	/* ------------------------------------------------------------------
-	 * Modal DOM helpers
+	 * Inline payment section helpers
 	 * ------------------------------------------------------------------ */
 
-	/** Inject the modal HTML once into the page body. */
-	function createModalMarkup() {
-		if ( $('#payphone-modal').length ) {
+	/**
+	 * Inject the inline payment section HTML once, right after the checkout
+	 * form. It is hidden by default; showPaymentBox() makes it visible.
+	 */
+	function createPaymentSection() {
+		if ( $('#payphone-payment-section').length ) {
 			return;
 		}
 
 		var html =
-			'<div id="payphone-modal-overlay"></div>' +
-			'<div id="payphone-modal" role="dialog" aria-modal="true" aria-label="Payphone">' +
-				'<button id="payphone-modal-close" type="button">' +
+			'<div id="payphone-payment-section" style="display:none;">' +
+				'<h2 class="payphone-section-title">' + payphoneParams.sectionTitle + '</h2>' +
+				'<div id="pp-button"></div>' +
+				'<button id="payphone-cancel-btn" type="button" class="payphone-cancel-btn">' +
 					payphoneParams.cancelText +
 				'</button>' +
-				'<div id="pp-button"></div>' +
 			'</div>';
 
-		$('body').append(html);
+		// Insert after the checkout form (or append to body as fallback).
+		var $form = $('form.checkout, form.woocommerce-checkout').first();
+		if ( $form.length ) {
+			$form.after(html);
+		} else {
+			$('body').append(html);
+		}
 	}
 
-	/** Show the modal and overlay. */
-	function openModal() {
-		isModalOpen   = true;
+	/**
+	 * Hide the checkout form and show the inline Payphone payment section.
+	 */
+	function showPaymentBox() {
+		isBoxOpen    = true;
 		ppBoxRendered = false;
-		$('#payphone-modal-overlay').fadeIn(200);
-		$('#payphone-modal').fadeIn(200);
+
+		$('form.checkout, form.woocommerce-checkout').first().hide();
+		$('#payphone-payment-section').show();
+
 		// Show a loading indicator until the box script renders.
 		$('#pp-button').html(
 			'<div class="payphone-loading">' +
 				payphoneParams.processingText +
 			'</div>'
 		);
+
+		// Scroll to the payment section.
+		$('html, body').animate(
+			{ scrollTop: $('#payphone-payment-section').offset().top - 40 },
+			300
+		);
 	}
 
-	/** Hide the modal and overlay, restore the WC form state. */
-	function closeModal() {
-		isModalOpen   = false;
+	/**
+	 * Hide the inline payment section and restore the checkout form so the
+	 * customer can change payment method or retry.
+	 */
+	function hidePaymentBox() {
+		isBoxOpen    = false;
 		ppBoxRendered = false;
-		$('#payphone-modal-overlay').fadeOut(150);
-		$('#payphone-modal').fadeOut(150, function () {
-			$('#pp-button').empty();
-		});
 
-		// Restore the checkout form so the customer can change payment method
-		// or retry without refreshing.
-		$('form.checkout').unblock();
-		$('form.woocommerce-checkout').unblock();
+		$('#payphone-payment-section').hide();
+		$('#pp-button').empty();
+
+		var $form = $('form.checkout, form.woocommerce-checkout').first();
+		$form.show();
+		$form.unblock();
 	}
 
-	/** Replace the box area with an error message. */
-	function showModalError( message ) {
+	/** Replace the #pp-button area with an inline error message. */
+	function showBoxError( message ) {
 		$('#pp-button').html(
-			'<p class="payphone-modal-error">' + $('<span>').text(message).html() + '</p>'
+			'<p class="payphone-box-error">' + $('<span>').text(message).html() + '</p>'
 		);
 	}
 
@@ -105,7 +127,7 @@
 				if ( response.success && response.data ) {
 					waitForBoxConstructor(response.data);
 				} else {
-					showModalError(
+					showBoxError(
 						( response.data && response.data.message )
 							? response.data.message
 							: payphoneParams.errorText
@@ -113,7 +135,7 @@
 				}
 			},
 			error: function () {
-				showModalError(payphoneParams.errorText);
+				showBoxError(payphoneParams.errorText);
 			},
 		});
 	}
@@ -125,7 +147,7 @@
 	 * @param {Object} data Payment parameters from WC session.
 	 */
 	function waitForBoxConstructor( data ) {
-		var attempts = 0;
+		var attempts    = 0;
 		var maxAttempts = 50; // 5 s maximum wait.
 
 		var interval = setInterval(function () {
@@ -136,14 +158,14 @@
 				renderBox(data);
 			} else if ( attempts >= maxAttempts ) {
 				clearInterval(interval);
-				showModalError(payphoneParams.errorText);
+				showBoxError(payphoneParams.errorText);
 			}
 		}, 100);
 	}
 
 	/**
-	 * Instantiate PPaymentButtonBox with the order's payment data.
-	 * `functionResult` is Payphone's callback when the transaction completes.
+	 * Instantiate PPaymentButtonBox with the order's payment data and render
+	 * it directly into the inline #pp-button container.
 	 *
 	 * @param {Object} data Payment parameters.
 	 */
@@ -201,9 +223,9 @@
 		if ( ! result || result.transactionStatus !== 'Approved' ) {
 			// Payment was declined or the customer cancelled inside the box.
 			cancelPayment();
-			closeModal();
+			hidePaymentBox();
 
-			// Surface an error notice on the checkout page.
+			// Surface an error notice on the restored checkout page.
 			var msg = ( result && result.transactionStatus )
 				? payphoneParams.errorText + ' (' + result.transactionStatus + ')'
 				: payphoneParams.errorText;
@@ -216,28 +238,28 @@
 			return;
 		}
 
-		// Show processing state.
+		// Show processing state while we confirm with the server.
 		$('#pp-button').html(
 			'<div class="payphone-loading">' +
 				payphoneParams.processingText +
 			'</div>'
 		);
 
-		// Confirm server-side.
+		// Confirm server-side via AJAX.
 		$.ajax({
 			url:  payphoneParams.ajaxUrl,
 			type: 'POST',
 			data: {
-				action:            'payphone_confirm_payment',
-				nonce:             payphoneParams.nonce,
-				transactionId:     result.transactionId,
+				action:              'payphone_confirm_payment',
+				nonce:               payphoneParams.nonce,
+				transactionId:       result.transactionId,
 				clientTransactionId: result.clientTransactionId || fallbackClientTxnId,
 			},
 			success: function (response) {
 				if ( response.success && response.data && response.data.redirect ) {
 					window.location.href = response.data.redirect;
 				} else {
-					showModalError(
+					showBoxError(
 						( response.data && response.data.message )
 							? response.data.message
 							: payphoneParams.errorText
@@ -245,7 +267,7 @@
 				}
 			},
 			error: function () {
-				showModalError(payphoneParams.errorText);
+				showBoxError(payphoneParams.errorText);
 			},
 		});
 	}
@@ -272,7 +294,7 @@
 	 * When the customer clicks the "Pagar con Payphone" button rendered inside
 	 * the payment fields area, programmatically trigger the standard WC
 	 * "Place Order" button. This kicks off the AJAX order creation, which then
-	 * returns our magic hash and opens the modal.
+	 * returns our magic hash and triggers the inline box.
 	 */
 	$(document).on('click', '#payphone-pay-button', function (e) {
 		e.preventDefault();
@@ -306,8 +328,8 @@
 	/**
 	 * WooCommerce fires `checkout_place_order_success` on the document body
 	 * after a successful AJAX order creation (classic checkout).  We intercept
-	 * the response here: if the redirect is our magic hash we open the Payphone
-	 * modal instead of letting WC navigate away.
+	 * the response: if the redirect is our magic hash we show the inline
+	 * Payphone box instead of letting WC navigate away.
 	 */
 	$(document.body).on('checkout_place_order_success', function (event, response) {
 		if (
@@ -319,7 +341,7 @@
 			$('form.checkout').unblock();
 			$('form.woocommerce-checkout').unblock();
 
-			openModal();
+			showPaymentBox();
 			fetchDataAndRenderBox();
 		}
 	});
@@ -328,36 +350,23 @@
 	 * Block-based checkout (WC 7.6+) redirects the browser to the URL
 	 * returned by process_payment(). Since that URL is a hash-only value
 	 * (`#payphone-modal-open`), no full navigation occurs – only a hashchange
-	 * event fires. We listen for it here so the modal opens in both classic
-	 * and block checkout.
+	 * event fires. We listen for it here so the inline box appears in both
+	 * classic and block checkout.
 	 */
 	window.addEventListener('hashchange', function () {
-		if ( window.location.hash === '#payphone-modal-open' && ! isModalOpen ) {
-			openModal();
+		if ( window.location.hash === '#payphone-modal-open' && ! isBoxOpen ) {
+			showPaymentBox();
 			fetchDataAndRenderBox();
 		}
 	});
 
 	/* ------------------------------------------------------------------
-	 * Modal close handlers
+	 * Cancel button handler
 	 * ------------------------------------------------------------------ */
 
-	$(document).on('click', '#payphone-modal-close', function () {
+	$(document).on('click', '#payphone-cancel-btn', function () {
 		cancelPayment();
-		closeModal();
-	});
-
-	$(document).on('click', '#payphone-modal-overlay', function () {
-		cancelPayment();
-		closeModal();
-	});
-
-	// Allow Escape key to close the modal.
-	$(document).on('keydown', function (e) {
-		if ( isModalOpen && ( e.key === 'Escape' || e.keyCode === 27 ) ) {
-			cancelPayment();
-			closeModal();
-		}
+		hidePaymentBox();
 	});
 
 	/* ------------------------------------------------------------------
@@ -365,7 +374,7 @@
 	 * ------------------------------------------------------------------ */
 
 	$(function () {
-		createModalMarkup();
+		createPaymentSection();
 	});
 
 }(jQuery));

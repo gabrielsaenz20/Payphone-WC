@@ -219,11 +219,12 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 			'payphone-checkout-js',
 			'payphoneParams',
 			array(
-				'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
-				'nonce'       => wp_create_nonce( 'payphone_nonce' ),
-				'gatewayId'   => $this->id,
-				'cancelText'  => __( 'Cancelar Pago', 'payphone-wc-modal' ),
-				'errorText'   => __( 'Ocurrió un error al procesar el pago. Por favor intenta de nuevo.', 'payphone-wc-modal' ),
+				'ajaxUrl'        => admin_url( 'admin-ajax.php' ),
+				'nonce'          => wp_create_nonce( 'payphone_nonce' ),
+				'gatewayId'      => $this->id,
+				'sectionTitle'   => __( 'Cajita de Pagos Payphone', 'payphone-wc-modal' ),
+				'cancelText'     => __( 'Cancelar Pago', 'payphone-wc-modal' ),
+				'errorText'      => __( 'Ocurrió un error al procesar el pago. Por favor intenta de nuevo.', 'payphone-wc-modal' ),
 				'processingText' => __( 'Procesando pago…', 'payphone-wc-modal' ),
 			)
 		);
