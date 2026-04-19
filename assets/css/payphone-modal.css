@@ -1,0 +1,108 @@
+/* ==========================================================================
+   Payphone WC Modal – Modal overlay styles
+   ========================================================================== */
+
+/* ---- Overlay ------------------------------------------------------------ */
+#payphone-modal-overlay {
+	display: none;
+	position: fixed;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.65);
+	z-index: 99998;
+	-webkit-backdrop-filter: blur(2px);
+	backdrop-filter: blur(2px);
+}
+
+/* ---- Modal container ---------------------------------------------------- */
+#payphone-modal {
+	display: none;
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	z-index: 99999;
+	background: #ffffff;
+	border-radius: 12px;
+	box-shadow: 0 8px 40px rgba(0, 0, 0, 0.28);
+	padding: 24px 20px 20px;
+	width: 90%;
+	max-width: 480px;
+	max-height: 90vh;
+	overflow-y: auto;
+	box-sizing: border-box;
+}
+
+/* ---- Close button ------------------------------------------------------- */
+#payphone-modal-close {
+	display: block;
+	margin: 0 0 16px auto;
+	padding: 6px 16px;
+	background: transparent;
+	border: 1px solid #d63638;
+	border-radius: 6px;
+	color: #d63638;
+	font-size: 0.85rem;
+	cursor: pointer;
+	transition: background 0.2s, color 0.2s;
+	line-height: 1.4;
+}
+
+#payphone-modal-close:hover,
+#payphone-modal-close:focus {
+	background: #d63638;
+	color: #ffffff;
+	outline: none;
+}
+
+/* ---- Loading state inside the box area ---------------------------------- */
+#pp-button {
+	min-height: 80px;
+	position: relative;
+}
+
+.payphone-loading {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	padding: 20px 0;
+	color: #666;
+	font-size: 0.9rem;
+}
+
+.payphone-loading::before {
+	content: '';
+	display: inline-block;
+	width: 20px;
+	height: 20px;
+	border: 3px solid #ccc;
+	border-top-color: #6610f2;
+	border-radius: 50%;
+	animation: payphone-spin 0.7s linear infinite;
+}
+
+@keyframes payphone-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+/* ---- Error notice inside modal ------------------------------------------ */
+.payphone-modal-error {
+	background: #fef2f2;
+	border: 1px solid #fecaca;
+	border-radius: 6px;
+	color: #b91c1c;
+	padding: 12px 16px;
+	font-size: 0.875rem;
+	line-height: 1.5;
+	margin-top: 8px;
+}
+
+/* ---- Responsive tweaks -------------------------------------------------- */
+@media (max-width: 480px) {
+	#payphone-modal {
+		padding: 18px 14px 16px;
+		border-radius: 8px;
+	}
+}
