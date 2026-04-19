@@ -16,7 +16,7 @@
  * Fallback (hash-change) flow is preserved for block checkout / JS failures.
  */
 
-/* global jQuery, payphoneParams */
+/* global jQuery, payphoneParams, PPaymentButtonBox */
 
 (function ($) {
 	'use strict';
@@ -94,36 +94,38 @@
 	}
 
 	/**
-	 * Load the Payphone CDN module via dynamic import() and render the box.
-	 * Dynamic import() works in regular (non-module) scripts in all modern
-	 * browsers and correctly exposes named ES module exports.
+	 * Wait for PPaymentButtonBox to be available on the global scope.
+	 *
+	 * A tiny <script type="module"> in wp_head imports PPaymentButtonBox from
+	 * the Payphone CDN and assigns it to window.PPaymentButtonBox. ES modules
+	 * are deferred by spec and execute before DOMContentLoaded, but the CDN
+	 * fetch may still be in-flight when our footer script starts. We poll until
+	 * the assignment lands (max 10 s).
 	 *
 	 * @param {Object} data Payment parameters returned by the AJAX handler.
 	 */
 	function waitForConstructor( data ) {
-		/* global import */
-		// eslint-disable-next-line no-undef
-		import(payphoneParams.cdnJs)
-			.then(function (module) {
-				var Constructor = module.PPaymentButtonBox || module['default'];
-				if ( typeof Constructor !== 'function' ) {
-					showBoxError(payphoneParams.errorText);
-					return;
-				}
-				renderBox(data, Constructor);
-			})
-			['catch'](function () {
+		var attempts = 0;
+
+		var interval = setInterval(function () {
+			attempts++;
+
+			if ( typeof PPaymentButtonBox !== 'undefined' ) {
+				clearInterval(interval);
+				renderBox(data);
+			} else if ( attempts >= 100 ) { // 100 × 100 ms = 10 s timeout
+				clearInterval(interval);
 				showBoxError(payphoneParams.errorText);
-			});
+			}
+		}, 100);
 	}
 
 	/**
 	 * Instantiate PPaymentButtonBox and render it into #pp-button.
 	 *
-	 * @param {Object}   data        Payment parameters.
-	 * @param {Function} Constructor PPaymentButtonBox constructor from the CDN module.
+	 * @param {Object} data Payment parameters.
 	 */
-	function renderBox( data, Constructor ) {
+	function renderBox( data ) {
 		if ( ppRendered ) {
 			return;
 		}
@@ -132,7 +134,7 @@
 		$('#pp-button').empty();
 
 		/* eslint-disable no-new */
-		new Constructor({
+		new PPaymentButtonBox({
 			token:               data.token,
 			amount:              data.amount,
 			amountWithoutTax:    data.amountWithoutTax,

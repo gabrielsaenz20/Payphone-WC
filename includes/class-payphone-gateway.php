@@ -48,6 +48,10 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 		// Hook: enqueue frontend scripts only on checkout.
 		add_action( 'wp_enqueue_scripts', array( $this, 'payment_scripts' ) );
 
+		// Hook: output the ES-module shim that exposes PPaymentButtonBox as a
+		// global so our classic checkout.js can access it via window.
+		add_action( 'wp_head', array( $this, 'output_payphone_module_script' ), 5 );
+
 		// WC API endpoint: Payphone redirects the browser here after payment.
 		// URL: {home}/wc-api/payphone_cajita/  – configure this in Payphone dashboard.
 		add_action( 'woocommerce_api_payphone_cajita', array( $this, 'handle_response_url' ) );
@@ -155,14 +159,35 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 	// -----------------------------------------------------------------------
 
 	/**
-	 * Enqueue the Payphone CDN files plus our own modal CSS/JS on the
-	 * checkout page.
+	 * Output a tiny ES-module script in <head> that imports PPaymentButtonBox
+	 * from the Payphone CDN and assigns it to window.PPaymentButtonBox.
 	 *
-	 * The Payphone JS is loaded as an ES module via dynamic import() inside
-	 * payphone-checkout.js rather than as a WordPress-enqueued script, because
-	 * WordPress cannot reliably add type="module" to script tags and ES module
-	 * exports are not accessible as globals. The CDN URL is passed via
-	 * payphoneParams so the JS can import it at runtime.
+	 * ES module exports are scoped to the module and never reach the global
+	 * scope automatically. By assigning it here (inside a real type="module"
+	 * script that the browser handles natively) we make PPaymentButtonBox
+	 * accessible to our classic payphone-checkout.js, which polls for it.
+	 *
+	 * This approach mirrors the pattern used in the working test.html and avoids
+	 * the pitfalls of dynamic import() inside a classic (non-module) script.
+	 */
+	public function output_payphone_module_script() {
+		if ( ! is_checkout() || 'no' === $this->enabled ) {
+			return;
+		}
+
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript
+		echo '<script type="module">'
+			. 'import{PPaymentButtonBox}from"https://cdn.payphonetodoesposible.com/box/v1.1/payphone-payment-box.js";'
+			. 'window.PPaymentButtonBox=PPaymentButtonBox;'
+			. '</script>' . "\n";
+	}
+
+	/**
+	 * Enqueue the Payphone CDN stylesheet plus our own modal CSS/JS on the
+	 * checkout page. The CDN JS itself is loaded via a <script type="module">
+	 * in output_payphone_module_script() so that its named export
+	 * (PPaymentButtonBox) can be assigned to window and accessed by our classic
+	 * payphone-checkout.js through the global scope.
 	 */
 	public function payment_scripts() {
 		if ( ! is_checkout() || 'no' === $this->enabled ) {
@@ -202,8 +227,6 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 				'ajaxUrl'        => admin_url( 'admin-ajax.php' ),
 				'nonce'          => wp_create_nonce( 'payphone_nonce' ),
 				'gatewayId'      => $this->id,
-				// CDN JS URL: imported dynamically inside payphone-checkout.js.
-				'cdnJs'          => 'https://cdn.payphonetodoesposible.com/box/v1.1/payphone-payment-box.js',
 				'errorText'      => __( 'Ocurrió un error al procesar el pago. Por favor intenta de nuevo.', 'payphone-wc-modal' ),
 				'processingText' => __( 'Procesando pago…', 'payphone-wc-modal' ),
 			)
