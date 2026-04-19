@@ -169,6 +169,7 @@
 			currency:            data.currency,
 			clientTransactionId: data.clientTransactionId,
 			backgroundColor:     data.backgroundColor,
+			responseUrl:         data.responseUrl,
 
 			/**
 			 * Called by the Payphone box when the transaction finishes

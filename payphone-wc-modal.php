@@ -74,6 +74,10 @@ add_action( 'plugins_loaded', function () {
 	// AJAX: cancel / abandon a pending order.
 	add_action( 'wp_ajax_payphone_cancel_payment', 'payphone_wc_cancel_payment' );
 	add_action( 'wp_ajax_nopriv_payphone_cancel_payment', 'payphone_wc_cancel_payment' );
+
+	// Response URL: Payphone redirects the browser here after payment.
+	add_action( 'wp_ajax_payphone_response_redirect', 'payphone_wc_response_redirect' );
+	add_action( 'wp_ajax_nopriv_payphone_response_redirect', 'payphone_wc_response_redirect' );
 } );
 
 // ---------------------------------------------------------------------------
@@ -222,4 +226,109 @@ function payphone_wc_cancel_payment() {
 	}
 
 	wp_send_json_success( array( 'message' => __( 'Pago cancelado.', 'payphone-wc-modal' ) ) );
+}
+
+/**
+ * Handle Payphone's browser redirect to the responseUrl after payment.
+ *
+ * Payphone appends `id` (transaction ID) and `clientTransactionId` to the URL
+ * as GET parameters. This handler confirms the transaction with Payphone's API,
+ * marks the WooCommerce order as paid, and redirects the customer to the
+ * order-received page. It also handles the case where the AJAX `functionResult`
+ * callback already confirmed payment (idempotent confirm call).
+ */
+function payphone_wc_response_redirect() {
+	// Accept both 'id' and 'transactionId' parameter names.
+	$transaction_id = isset( $_REQUEST['id'] )
+		? sanitize_text_field( wp_unslash( $_REQUEST['id'] ) )
+		: '';
+	if ( ! $transaction_id && isset( $_REQUEST['transactionId'] ) ) {
+		$transaction_id = sanitize_text_field( wp_unslash( $_REQUEST['transactionId'] ) );
+	}
+
+	$client_transaction_id = isset( $_REQUEST['clientTransactionId'] )
+		? sanitize_text_field( wp_unslash( $_REQUEST['clientTransactionId'] ) )
+		: '';
+
+	if ( ! is_numeric( $transaction_id ) || ! $client_transaction_id ) {
+		wp_die( esc_html__( 'Parámetros de transacción inválidos.', 'payphone-wc-modal' ) );
+	}
+
+	// Extract the WooCommerce order ID from our clientTransactionId format: WC-{id}-{time}.
+	$order_id = 0;
+	if ( preg_match( '/^WC-(\d+)-\d+$/', $client_transaction_id, $matches ) ) {
+		$order_id = (int) $matches[1];
+	}
+
+	if ( ! $order_id ) {
+		wp_die( esc_html__( 'No se pudo determinar la orden de compra.', 'payphone-wc-modal' ) );
+	}
+
+	$order = wc_get_order( $order_id );
+	if ( ! $order ) {
+		wp_die( esc_html__( 'Orden no encontrada.', 'payphone-wc-modal' ) );
+	}
+
+	// If already paid (e.g. confirmed earlier by the functionResult JS callback),
+	// just redirect to the order-received page without calling the API again.
+	if ( $order->is_paid() ) {
+		wp_safe_redirect( $order->get_checkout_order_received_url() );
+		exit;
+	}
+
+	// Confirm with Payphone API.
+	$gateway  = new Payphone_WC_Gateway();
+	$token    = $gateway->get_option( 'token' );
+
+	$response = wp_remote_post(
+		'https://pay.payphone.app/api/button/V2/confirm',
+		array(
+			'headers' => array(
+				'Authorization' => 'Bearer ' . $token,
+				'Content-Type'  => 'application/json',
+			),
+			'body'    => wp_json_encode(
+				array(
+					'id'                  => (int) $transaction_id,
+					'clientTransactionId' => $client_transaction_id,
+				)
+			),
+			'timeout' => 30,
+		)
+	);
+
+	if ( is_wp_error( $response ) ) {
+		$order->update_status( 'failed', $response->get_error_message() );
+		wp_safe_redirect( wc_get_checkout_url() );
+		exit;
+	}
+
+	$body   = json_decode( wp_remote_retrieve_body( $response ), true );
+	$status = isset( $body['transactionStatus'] ) ? $body['transactionStatus'] : '';
+
+	if ( 'Approved' === $status ) {
+		$order->payment_complete( $transaction_id );
+		$order->add_order_note(
+			sprintf(
+				/* translators: %s: Payphone transaction ID */
+				__( 'Pago aprobado por Payphone. ID de transacción: %s', 'payphone-wc-modal' ),
+				esc_html( $transaction_id )
+			)
+		);
+
+		// Clean up session if still set.
+		if ( WC()->session ) {
+			WC()->session->set( 'payphone_order_id', null );
+			WC()->session->set( 'payphone_payment_data', null );
+		}
+
+		wp_safe_redirect( $order->get_checkout_order_received_url() );
+	} else {
+		$order->update_status(
+			'failed',
+			__( 'Pago rechazado o no aprobado por Payphone.', 'payphone-wc-modal' )
+		);
+		wp_safe_redirect( wc_get_checkout_url() );
+	}
+	exit;
 }

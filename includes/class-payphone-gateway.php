@@ -35,7 +35,9 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 
 		$this->title       = $this->get_option( 'title' );
 		$this->description = $this->get_option( 'description' );
-		$this->enabled     = $this->get_option( 'enabled' );
+		// Default to 'yes' so the gateway shows immediately after installation
+		// before the admin has saved the settings page for the first time.
+		$this->enabled     = $this->get_option( 'enabled', 'yes' );
 
 		// Hook: save admin settings.
 		add_action(
@@ -246,7 +248,15 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 			'currency'            => get_woocommerce_currency(),
 			'clientTransactionId' => $client_transaction_id,
 			'backgroundColor'     => $this->get_option( 'bg_color', '#6610f2' ),
-			'returnUrl'           => $order->get_checkout_order_received_url(),
+			// responseUrl: where Payphone redirects the browser after payment.
+			// Our handler confirms the transaction and redirects to order-received.
+			'responseUrl'         => add_query_arg(
+				array(
+					'action'              => 'payphone_response_redirect',
+					'clientTransactionId' => $client_transaction_id,
+				),
+				admin_url( 'admin-ajax.php' )
+			),
 		);
 
 		// Persist in the WC session so the AJAX handler can read it back.
