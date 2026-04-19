@@ -36,16 +36,7 @@ return array(
     'default' => '',
     'options' => array_merge(
       array('' => __('— Default (auto-created post) —', PayphoneConfig::PAYPHONE_TRANSLATIONS)),
-      array_column(
-        array_map(
-          function ($page) {
-            return array('id' => (string) $page->ID, 'title' => $page->post_title);
-          },
-          get_pages(array('post_status' => 'publish', 'sort_column' => 'post_title'))
-        ),
-        'title',
-        'id'
-      )
+      wp_list_pluck(get_pages(array('post_status' => 'publish', 'sort_column' => 'post_title')), 'post_title', 'ID')
     )
   ),
   'custom_css' => array(

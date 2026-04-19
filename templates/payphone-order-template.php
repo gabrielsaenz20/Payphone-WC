@@ -21,13 +21,18 @@ $redirectHome = "<script>location.href = '" . get_site_url() . "'</script>";
 // Obtener el ID de la order
 // Obtener los datos completos de la orden
 $queries = array();
+$order_id = 0;
 parse_str($_SERVER['QUERY_STRING'], $queries);
 if (array_key_exists("orderId", $queries)) {
-  $order_id = $queries['orderId'];
+  $order_id = (int) $queries['orderId'];
 }
 if ($order_id) {
   try {
     $order = wc_get_order($order_id);
+    if (!$order) {
+      echo $redirectHome;
+      exit;
+    }
     $showTransactionPayphone = $order->get_meta('showTransactionPayphone', true);
 
     if ($showTransactionPayphone || !$order) {
@@ -100,7 +105,19 @@ if ($order_id) {
             $order->update_meta_data('showTransactionPayphone', 'ready');
             $order->save();
           } else {
-            //echo $redirectHome;
+            // DataPayphone not yet available — show a pending notice
+            ?>
+            <div class="ppbo-hero ppbo-hero--pending">
+              <div class="ppbo-hero__icon">&#8987;</div>
+              <h2 class="ppbo-hero__title"><?php echo __('We are processing your payment', PayphoneConfig::PAYPHONE_TRANSLATIONS) ?></h2>
+              <p class="ppbo-hero__subtitle">
+                <?php echo sprintf(
+                  __('Order #%s is being reviewed. You will receive a confirmation email shortly.', PayphoneConfig::PAYPHONE_TRANSLATIONS),
+                  absint($order->get_id())
+                ) ?>
+              </p>
+            </div>
+            <?php
           }
         }
         ?>

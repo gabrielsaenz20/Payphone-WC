@@ -93,3 +93,89 @@
 .ppbo-order main .payment-info > div {
   margin-bottom:4px;
 }
+
+/* ── Hero / result banners ── */
+.ppbo-hero {
+  text-align: center;
+  padding: 32px 24px 28px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+.ppbo-hero--success {
+  background-color: #f0fdf4;
+  border: 1px solid #86efac;
+}
+.ppbo-hero--canceled,
+.ppbo-hero--failed {
+  background-color: #fef2f2;
+  border: 1px solid #fca5a5;
+}
+.ppbo-hero--pending {
+  background-color: #fffbeb;
+  border: 1px solid #fcd34d;
+}
+.ppbo-hero__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0 auto 16px;
+}
+.ppbo-hero--success .ppbo-hero__icon {
+  background-color: #22c55e;
+  color: #fff;
+}
+.ppbo-hero--canceled .ppbo-hero__icon,
+.ppbo-hero--failed .ppbo-hero__icon {
+  background-color: #ef4444;
+  color: #fff;
+}
+.ppbo-hero--pending .ppbo-hero__icon {
+  background-color: #f59e0b;
+  color: #fff;
+}
+.ppbo-hero__title {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 10px;
+  color: #111;
+}
+.ppbo-hero__subtitle {
+  font-size: 14px;
+  color: #555;
+  margin: 0 0 22px;
+  line-height: 1.5;
+}
+.ppbo-hero__actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ppbo-btn {
+  display: inline-block;
+  padding: 10px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.ppbo-btn:hover {
+  opacity: 0.85;
+  text-decoration: none;
+}
+.ppbo-btn--primary {
+  background-color: #2563eb;
+  color: #fff;
+}
+.ppbo-btn--outline {
+  background-color: transparent;
+  color: #2563eb;
+  border: 1.5px solid #2563eb;
+}

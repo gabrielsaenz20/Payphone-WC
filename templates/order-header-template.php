@@ -5,6 +5,8 @@ $client = $order->get_billing_first_name() . ' ' . $order->get_billing_last_name
 $phone = $order->get_billing_phone();
 $email = $order->get_billing_email();
 $status = $dataTransaction->transactionStatus;
+$is_approved = (int) $dataTransaction->statusCode === 3;
+$is_canceled = (int) $dataTransaction->statusCode === 2;
 switch ($dataTransaction->statusCode) {
   case 2:
     $status = __('Canceled', PayphoneConfig::PAYPHONE_TRANSLATIONS);
@@ -17,6 +19,37 @@ switch ($dataTransaction->statusCode) {
 }
 
 ?>
+
+<?php if ($is_approved) : ?>
+<div class="ppbo-hero ppbo-hero--success">
+  <div class="ppbo-hero__icon">&#10003;</div>
+  <h2 class="ppbo-hero__title"><?php echo __('Thank you for your purchase!', PayphoneConfig::PAYPHONE_TRANSLATIONS) ?></h2>
+  <p class="ppbo-hero__subtitle">
+    <?php echo sprintf(
+      __('Order #%1$s has been confirmed. A confirmation email was sent to %2$s.', PayphoneConfig::PAYPHONE_TRANSLATIONS),
+      absint($order->get_id()),
+      esc_html($email)
+    ) ?>
+  </p>
+</div>
+<?php elseif ($is_canceled) : ?>
+<div class="ppbo-hero ppbo-hero--canceled">
+  <div class="ppbo-hero__icon">&#10005;</div>
+  <h2 class="ppbo-hero__title"><?php echo __('Payment not completed', PayphoneConfig::PAYPHONE_TRANSLATIONS) ?></h2>
+  <p class="ppbo-hero__subtitle">
+    <?php echo __('Your payment was canceled. No charge has been made to your account.', PayphoneConfig::PAYPHONE_TRANSLATIONS) ?>
+  </p>
+  <div class="ppbo-hero__actions">
+    <a href="<?php echo esc_url(wc_get_checkout_url()) ?>" class="ppbo-btn ppbo-btn--primary">
+      <?php echo __('Try again', PayphoneConfig::PAYPHONE_TRANSLATIONS) ?>
+    </a>
+    <a href="<?php echo esc_url(get_permalink(wc_get_page_id('shop'))) ?>" class="ppbo-btn ppbo-btn--outline">
+      <?php echo __('Back to shop', PayphoneConfig::PAYPHONE_TRANSLATIONS) ?>
+    </a>
+  </div>
+</div>
+<?php endif; ?>
+
 <div class="header">
   <a href="https://www.payphone.app/" target="_blank" style="display: inline-block;">
     <img style="width:181px" alt="logo Payphone" src="<?php echo WC_PAYPHONE_PLUGIN_URL . '/assets/images/logo.png' ?>">
