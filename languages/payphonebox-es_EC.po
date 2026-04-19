@@ -1,0 +1,295 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Payphonebox\n"
+"POT-Creation-Date: 2024-09-05 12:39-0500\n"
+"PO-Revision-Date: 2024-09-05 12:42-0500\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: es_EC\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 3.4.2\n"
+"X-Poedit-WPHeader: woocommerce-gateway-payphone-box.php\n"
+"X-Poedit-SourceCharset: UTF-8\n"
+"X-Poedit-Basepath: ..\n"
+"X-Poedit-KeywordsList: __;esc_html_e\n"
+"X-Poedit-SearchPath-0: .\n"
+"X-Poedit-SearchPathExcluded-0: block-payment/node_modules\n"
+
+#: block-payment/src/Content.js:45
+msgid "Complete the required fields"
+msgstr "Completar los campos requeridos"
+
+#: block-payment/src/Content.js:51
+msgid "Payment was not made, try again"
+msgstr "El pago no fue realizado, intentar de nuevo"
+
+#: block-payment/src/Content.js:56
+msgid "An error occurred while processing the payment"
+msgstr "Se produjo un error al procesar el pago"
+
+#: block-payment/src/Content.js:63
+msgid "The payment box needs to be initialized"
+msgstr "Es necesario inicializar la caja de pagos"
+
+#: block-payment/src/Content.js:147
+msgid "The Payphone library is not loaded correctly."
+msgstr "La librería de Payphone no está cargada correctamente."
+
+#: block-payment/src/Content.js:155
+msgid "Configure the authorization token."
+msgstr "Configurar el token de autorización."
+
+#. Plugin Name of the plugin/theme
+#: includes/payphone-config.php:19
+msgid "WooCommerce - Payphone Payment Box"
+msgstr ""
+
+#: includes/payphone-config.php:23 includes/payphone-payment-gateway.php:109
+msgid "Pay with Payphone"
+msgstr "Pagar con Payphone"
+
+#: includes/payphone-dependencies.php:73
+msgid "The Payphone plugin requires WooCommerce to be installed and activated."
+msgstr ""
+"El plugin de Payphone requiere que Woocommerce esté instalado y activado."
+
+#: includes/payphone-dependencies.php:78
+#, php-format
+msgid "The Payphone plugin requires at least PHP %s"
+msgstr "El plugin de Payphone requiere al menos PHP %s"
+
+#: includes/payphone-payment-confirm.php:32
+msgid "No valid response was obtained"
+msgstr "No se obtuvo respuesta válida"
+
+#: includes/payphone-payment-confirm.php:33
+msgid ""
+"Url not found, payment with PayPhone will be automatically reversed, contact "
+"the administrator"
+msgstr ""
+"Url no encontrada, el pago con PayPhone se revertirá automáticamente, "
+"contacte al administrador"
+
+#: includes/payphone-payment-confirm.php:92
+msgid "Url not found to confirm the transaction"
+msgstr "URL no encontrada para confirmar la transacción"
+
+#: includes/payphone-payment-confirm.php:99
+msgid "The request could not be completed"
+msgstr "No se ha podido completar la solicitud"
+
+#: includes/payphone-payment-gateway.php:25
+msgid "Payphone Payment Box"
+msgstr "Payphone Caja de Pagos"
+
+#: includes/payphone-payment-gateway.php:26
+msgid "Receive payments via credit or debit card Visa or Mastercard | Payphone"
+msgstr ""
+"Recibe pagos con tarjeta de crédito o débito Visa o Mastercard | Payphone"
+
+#: includes/payphone-payment-gateway.php:112
+msgid "Initial Key Setting"
+msgstr "Configuración de clave inicial"
+
+#: includes/payphone-payment-gateway.php:113
+msgid "Response URL:"
+msgstr "URL de respuesta:"
+
+#: includes/payphone-payment-gateway.php:150
+msgid "Payment error: "
+msgstr "Error en el pago: "
+
+#: includes/payphone-payment-gateway.php:153
+msgid "An error occurred in the payment. Contact the administrator."
+msgstr "Ocurrio un error en el pago. Contactar con el administrador."
+
+#: includes/payphone-plugin.php:154
+msgid "Settings"
+msgstr "Ajustes"
+
+#: includes/payphone-plugin.php:157
+msgid "Docs"
+msgstr "Docs"
+
+#: includes/payphone-settings.php:13
+msgid "Enable/Disable"
+msgstr "Habilitar/Deshabilitar"
+
+#: includes/payphone-settings.php:15
+msgid "Enable PayPhone Payment Module."
+msgstr "Habilite el módulo de pago PayPhone."
+
+#: includes/payphone-settings.php:17
+msgid "Show payphone in the Payment List as a payment option"
+msgstr "Mostrar Payphone en la lista de pagos como opción de pago"
+
+#: includes/payphone-settings.php:20
+msgid "Authorization Token:"
+msgstr "Token de autorización:"
+
+#: includes/payphone-settings.php:22
+msgid "Token obtained from the Payphone developer console."
+msgstr "Token obtenido desde la consola de Payphone developer."
+
+#: includes/payphone-settings.php:26
+msgid "Store Id:"
+msgstr "Identificación de la tienda:"
+
+#: includes/payphone-settings.php:28
+msgid ""
+"Optional. Configure this identifier to collect from the merchant's branch. "
+"You can get this field from the Payphone Developer console"
+msgstr ""
+"Opcional. Configurar este identificador para cobrar con la sucursal del "
+"comercio. Puedes obtener este campo desde la consola de Payphone Developer"
+
+#: templates/order-failed-template.php:6
+msgid ""
+"Unfortunately, your order cannot be processed because Payphone declined the "
+"transaction. Please try your purchase again."
+msgstr ""
+"Lamentablemente, su pedido no se puede procesar porque Payphone rechazó la "
+"transacción. Por favor intenta realizar tu compra nuevamente."
+
+#: templates/order-footer-template.php:7
+msgid ""
+"This payment is being processed by Payphone, a provider of Grupo Promerica."
+msgstr ""
+"Este pago está siendo procesado por Payphone, un proveedor del Grupo "
+"Promerica."
+
+#: templates/order-header-template.php:10
+msgid "Canceled"
+msgstr "Cancelado"
+
+#: templates/order-header-template.php:13
+msgid "Approved"
+msgstr "Aprobado"
+
+#: templates/order-header-template.php:31
+msgid "Pay"
+msgstr "Pago"
+
+#: templates/order-header-template.php:38
+msgid "Order"
+msgstr "Pedido"
+
+#: templates/order-header-template.php:50
+msgid "Date"
+msgstr "Fecha"
+
+#: templates/order-header-template.php:54
+#: templates/order-payment-detail-template.php:23
+msgid "Client"
+msgstr "Cliente"
+
+#: templates/order-header-template.php:60
+msgid "Authorization"
+msgstr "Autorización"
+
+#: templates/order-header-template.php:64
+msgid "Phone"
+msgstr "Teléfono"
+
+#: templates/order-header-template.php:64
+#: templates/order-header-template.php:70
+msgid "Email"
+msgstr "Correo electrónico"
+
+#: templates/order-payment-detail-template.php:6
+msgid "Detail Payment"
+msgstr "Detalle de Pago"
+
+#: templates/order-payment-detail-template.php:11
+msgid "Payment Method"
+msgstr "Método de pago"
+
+#: templates/order-payment-detail-template.php:17
+msgid "Transaction number"
+msgstr "Número de transacción"
+
+#: templates/order-payment-detail-template.php:23
+msgid "Names"
+msgstr "Nombres"
+
+#: templates/order-payment-detail-template.php:29
+msgid "Reference"
+msgstr "Referencia"
+
+#: templates/order-products-template.php:19
+msgid "Description"
+msgstr "Descripción"
+
+#: templates/order-products-template.php:22
+msgid "Quant."
+msgstr "Cant."
+
+#: templates/order-products-template.php:25
+msgid "Unit Price"
+msgstr "P. Unitario"
+
+#: templates/order-products-template.php:28
+#: templates/order-products-template.php:108
+msgid "Total"
+msgstr "Total"
+
+#: templates/order-products-template.php:55
+msgid "Subtotal"
+msgstr "Subtotal"
+
+#: templates/order-products-template.php:65
+msgid "Fee"
+msgstr "Tarifa"
+
+#: templates/order-products-template.php:76
+msgid "Discount"
+msgstr "Descuento"
+
+#: templates/order-products-template.php:87
+msgid "Shipping"
+msgstr "Envío"
+
+#: templates/order-products-template.php:98
+msgid "Tax"
+msgstr "Impuesto"
+
+#. Plugin URI of the plugin/theme
+msgid "https://www.payphone.app/business/"
+msgstr ""
+
+#. Description of the plugin/theme
+msgid ""
+"Accept payments in your online store with Visa, Mastercard cards or Payphone "
+"balance using our plugin."
+msgstr ""
+"Acepta pagos en tu tienda en línea con tarjetas Visa, Mastercard o saldo "
+"Payphone mediante nuestro plugin."
+
+#. Author of the plugin/theme
+msgid "Payphone"
+msgstr ""
+
+#. Author URI of the plugin/theme
+msgid "https://www.payphone.app/"
+msgstr ""
+
+#~ msgid "Given by payphone"
+#~ msgstr "Obtener desde Payphone"
+
+#~ msgid "Amount"
+#~ msgstr "Cant."
+
+#~ msgid "Mail"
+#~ msgstr "Correo electrónico"
+
+#~ msgid ""
+#~ "Order payment failed. To make a successful payment using Payphone, please "
+#~ "review the gateway settings."
+#~ msgstr ""
+#~ "El pago de la orde falló. Para realizar un pago exitoso usando Payphone, "
+#~ "revise la configuración de la puerta de enlace."
+
+#~ msgid "Pay with PayPhone"
+#~ msgstr "Pagar con Payphone"
