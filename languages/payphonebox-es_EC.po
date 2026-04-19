@@ -153,6 +153,55 @@ msgstr ""
 "Lamentablemente, su pedido no se puede procesar porque Payphone rechazó la "
 "transacción. Por favor intenta realizar tu compra nuevamente."
 
+#: templates/order-failed-template.php:7
+msgid "Payment could not be processed"
+msgstr "El pago no pudo ser procesado"
+
+#: templates/order-failed-template.php:10
+#, php-format
+msgid ""
+"Unfortunately your order #%s could not be processed. Please try again or "
+"contact us if the problem persists."
+msgstr ""
+"Lamentablemente su pedido #%s no pudo ser procesado. Por favor inténtelo de "
+"nuevo o contáctenos si el problema persiste."
+
+#: templates/order-failed-template.php:16
+#: templates/order-header-template.php:44
+msgid "Try again"
+msgstr "Intentar de nuevo"
+
+#: templates/order-failed-template.php:19
+#: templates/order-header-template.php:47
+msgid "Back to shop"
+msgstr "Volver a la tienda"
+
+#: templates/order-header-template.php:26
+msgid "Thank you for your purchase!"
+msgstr "¡Gracias por tu compra!"
+
+#: templates/order-header-template.php:29
+#, php-format
+msgid "Order #%1$s has been confirmed. A confirmation email was sent to %2$s."
+msgstr "El pedido #%1$s ha sido confirmado. Se envió un correo de confirmación a %2$s."
+
+#: templates/order-header-template.php:38
+msgid "Payment not completed"
+msgstr "Pago no completado"
+
+#: templates/order-header-template.php:40
+msgid "Your payment was canceled. No charge has been made to your account."
+msgstr "Tu pago fue cancelado. No se realizó ningún cobro en tu cuenta."
+
+#: templates/payphone-order-template.php:112
+msgid "We are processing your payment"
+msgstr "Estamos procesando tu pago"
+
+#: templates/payphone-order-template.php:115
+#, php-format
+msgid "Order #%s is being reviewed. You will receive a confirmation email shortly."
+msgstr "El pedido #%s está siendo revisado. Recibirás un correo de confirmación en breve."
+
 #: templates/order-footer-template.php:7
 msgid ""
 "This payment is being processed by Payphone, a provider of Grupo Promerica."
