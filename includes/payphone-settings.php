@@ -28,6 +28,26 @@ return array(
     'description' => __("Optional. Configure this identifier to collect from the merchant's branch. You can get this field from the Payphone Developer console", PayphoneConfig::PAYPHONE_TRANSLATIONS),
     'desc_tip' => true
   ),
+  'result_page_id' => array(
+    'title' => __('Result Page:', PayphoneConfig::PAYPHONE_TRANSLATIONS),
+    'type' => 'select',
+    'description' => __('Select the page where customers will be redirected after completing a payment. The page must exist before selecting it here.', PayphoneConfig::PAYPHONE_TRANSLATIONS),
+    'desc_tip' => true,
+    'default' => '',
+    'options' => array_merge(
+      array('' => __('— Default (auto-created post) —', PayphoneConfig::PAYPHONE_TRANSLATIONS)),
+      array_column(
+        array_map(
+          function ($page) {
+            return array('id' => (string) $page->ID, 'title' => $page->post_title);
+          },
+          get_pages(array('post_status' => 'publish', 'sort_column' => 'post_title'))
+        ),
+        'title',
+        'id'
+      )
+    )
+  ),
   'custom_css' => array(
     'title' => __('Custom CSS:', PayphoneConfig::PAYPHONE_TRANSLATIONS),
     'type' => 'textarea',

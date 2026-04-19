@@ -139,7 +139,8 @@ class PayphonePaymentGateway extends WC_Payment_Gateway
         $order->add_meta_data("DataPayphone", json_encode($response));
         $order->save();
 
-        $pageResultId = get_option(PayphoneConfig::PAGE_RESULT_SLUG);
+        $configured_page = (int) $this->get_option('result_page_id');
+        $pageResultId = $configured_page ?: get_option(PayphoneConfig::PAGE_RESULT_SLUG);
         return array(
           'result' => 'success',
           'redirect' => add_query_arg('orderId', $order_id, get_permalink($pageResultId))

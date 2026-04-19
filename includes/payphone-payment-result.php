@@ -17,7 +17,13 @@ class PayphonePaymentResult
 
   function payphone_order_plugin_template_redirect(): void
   {
-    if (is_single(PayphoneConfig::PAGE_RESULT_SLUG)) {
+    $settings = get_option('woocommerce_' . PayphoneConfig::PAYPHONE_GATEWAY_ID . '_settings', array());
+    $result_page_id = isset($settings['result_page_id']) ? (int) $settings['result_page_id'] : 0;
+
+    $is_result_page = is_single(PayphoneConfig::PAGE_RESULT_SLUG)
+      || ($result_page_id > 0 && is_page($result_page_id));
+
+    if ($is_result_page) {
       include_once WC_PAYPHONE_PLUGIN_PATH . 'templates/payphone-order-template.php';
       exit;
     }
