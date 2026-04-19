@@ -177,8 +177,8 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 
 		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript
 		echo '<script type="module">'
-			. 'import{PPaymentButtonBox}from"https://cdn.payphonetodoesposible.com/box/v1.1/payphone-payment-box.js";'
-			. 'window.PPaymentButtonBox=PPaymentButtonBox;'
+			. 'import*as M from"https://cdn.payphonetodoesposible.com/box/v1.1/payphone-payment-box.js";'
+			. 'window.PPaymentButtonBox=M.PPaymentButtonBox||M["default"]||M;'
 			. '</script>' . "\n";
 	}
 
