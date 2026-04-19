@@ -188,9 +188,10 @@ function payphone_wc_confirm_payment() {
 			)
 		);
 
-		// Clean up session.
+		// Clean up session and empty cart now that payment is confirmed.
 		WC()->session->set( 'payphone_order_id', null );
 		WC()->session->set( 'payphone_payment_data', null );
+		WC()->cart->empty_cart();
 
 		wp_send_json_success(
 			array( 'redirect' => $order->get_checkout_order_received_url() )

@@ -293,12 +293,22 @@ class Payphone_WC_Gateway extends WC_Payment_Gateway {
 		WC()->session->set( 'payphone_order_id', $order_id );
 		WC()->session->set( 'payphone_payment_data', $payment_data );
 
-		// Mark order pending. Stock reduction and cart clearing happen here;
-		// WooCommerce will automatically restore stock if the order is cancelled,
-		// and payment_complete() will trigger the final stock update on success.
+		/*
+		 * Mark the order as pending.
+		 *
+		 * We intentionally do NOT empty the cart or reduce stock here.
+		 * Emptying the cart before the customer actually pays causes
+		 * WooCommerce's frontend JS to detect the empty cart and redirect
+		 * the browser to the cart/shop page – which prevents the Payphone
+		 * modal from ever opening.
+		 *
+		 * The cart is emptied naturally when the customer reaches the
+		 * order-received (thank-you) page after a confirmed payment.
+		 * Stock levels are reduced automatically by WooCommerce when
+		 * payment_complete() is called (via the
+		 * woocommerce_payment_complete hook chain).
+		 */
 		$order->update_status( 'pending', __( 'Esperando confirmación de pago de Payphone.', 'payphone-wc-modal' ) );
-		wc_reduce_stock_levels( $order_id );
-		WC()->cart->empty_cart();
 
 		/*
 		 * Returning '#payphone-modal-open' as the redirect URL causes the WC JS
