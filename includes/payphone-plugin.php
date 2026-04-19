@@ -63,6 +63,7 @@ class PayphonePlugin
     add_action('plugins_loaded', [$this, 'load_payphone_plugins']);
     // add_filter('locale', array($this, 'payphone_change_locale')); //Change locale es_* to es_EC
     add_action('wp_head', array($this, 'payphone_add_header_code'));
+    add_action('wp_enqueue_scripts', array($this, 'payphone_enqueue_styles'));
 
     add_filter('load_textdomain_mofile', array($this, 'payphone_load_my_own_textdomain'), 10, 2); //Change locale es_* to es_EC
 
@@ -87,9 +88,34 @@ class PayphonePlugin
   {
     ?>
 <script type="module" src="<?php echo PayphoneConfig::PAYPHONE_PAYMENT_BUTTON_BOX_JS ?>"></script>
-<link rel="stylesheet" href="<?php echo PayphoneConfig::PAYPHONE_PAYMENT_BUTTON_BOX_CSS ?>">
-</link>
 <?php
+  }
+
+  /**
+   * Enqueue the Payphone SDK stylesheet and the local overrides stylesheet.
+   * Custom CSS entered in the gateway settings is appended as inline styles.
+   */
+  public function payphone_enqueue_styles()
+  {
+    wp_register_style(
+      'payphone-payment-box',
+      PayphoneConfig::PAYPHONE_PAYMENT_BUTTON_BOX_CSS,
+      array(),
+      null
+    );
+
+    wp_enqueue_style(
+      'payphone-overrides',
+      WC_PAYPHONE_PLUGIN_URL . '/assets/css/payphone-overrides.css',
+      array('payphone-payment-box'),
+      WC_PAYPHONE_PLUGIN_VERSION
+    );
+
+    $settings   = get_option('woocommerce_' . PayphoneConfig::PAYPHONE_GATEWAY_ID . '_settings', array());
+    $custom_css = isset($settings['custom_css']) ? trim($settings['custom_css']) : '';
+    if ($custom_css !== '') {
+      wp_add_inline_style('payphone-overrides', $custom_css);
+    }
   }
 
   public function load_payphone_plugins(): bool

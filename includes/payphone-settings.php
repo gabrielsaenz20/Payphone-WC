@@ -27,5 +27,12 @@ return array(
     'type' => 'text',
     'description' => __("Optional. Configure this identifier to collect from the merchant's branch. You can get this field from the Payphone Developer console", PayphoneConfig::PAYPHONE_TRANSLATIONS),
     'desc_tip' => true
+  ),
+  'custom_css' => array(
+    'title' => __('Custom CSS:', PayphoneConfig::PAYPHONE_TRANSLATIONS),
+    'type' => 'textarea',
+    'description' => __('Optional. Add CSS rules to customise the appearance of the Payphone payment form. Example: <code>.ppb-body { background-color: transparent; }</code>', PayphoneConfig::PAYPHONE_TRANSLATIONS),
+    'default' => '',
+    'desc_tip' => false
   )
 );

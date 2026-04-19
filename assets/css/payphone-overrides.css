@@ -1,0 +1,24 @@
+/**
+ * Payphone Payment Box – CSS Overrides
+ *
+ * Use this file (or the "Custom CSS" field in WooCommerce → Settings →
+ * Payments → Payphone Payment Box) to customise the appearance of the
+ * Payphone payment form without modifying the SDK stylesheet.
+ *
+ * Example overrides are listed below. Uncomment any rule you want to apply.
+ */
+
+/* Remove the default background colour of the payment form body */
+/* .ppb-body {
+    background-color: transparent;
+} */
+
+/* Hide the Payphone logo inside the form */
+/* .ppb-header-logo {
+    display: none;
+} */
+
+/* Adjust the primary button colour */
+/* .ppb-button-pay {
+    background-color: #0071ce;
+} */
