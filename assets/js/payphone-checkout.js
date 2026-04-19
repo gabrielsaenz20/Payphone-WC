@@ -110,10 +110,10 @@
 		var interval = setInterval(function () {
 			attempts++;
 
-			if ( typeof PPaymentButtonBox !== 'undefined' ) {
+			if ( typeof PPaymentButtonBox === 'function' ) {
 				clearInterval(interval);
 				renderBox(data);
-			} else if ( attempts >= 100 ) { // 100 × 100 ms = 10 s timeout
+			} else if ( window.__payphoneSdkLoaded || attempts >= 100 ) { // stop as soon as SDK loaded or after 10 s
 				clearInterval(interval);
 				showBoxError(payphoneParams.errorText);
 			}
@@ -129,38 +129,49 @@
 		if ( ppRendered ) {
 			return;
 		}
+
+		var container = document.getElementById('pp-button');
+		if ( ! container ) {
+			return;
+		}
+
 		ppRendered = true;
 
 		$('#pp-button').empty();
 
 		/* eslint-disable no-new */
-		new PPaymentButtonBox({
-			token:               data.token,
-			amount:              data.amount,
-			amountWithoutTax:    data.amountWithoutTax,
-			amountWithTax:       data.amountWithTax,
-			tax:                 data.tax,
-			service:             data.service,
-			tip:                 data.tip,
-			storeId:             data.storeId,
-			reference:           data.reference,
-			currency:            data.currency,
-			clientTransactionId: data.clientTransactionId,
-			backgroundColor:     data.backgroundColor,
-			responseUrl:         data.responseUrl,
+		try {
+			new PPaymentButtonBox({
+				token:               data.token,
+				amount:              data.amount,
+				amountWithoutTax:    data.amountWithoutTax,
+				amountWithTax:       data.amountWithTax,
+				tax:                 data.tax,
+				service:             data.service,
+				tip:                 data.tip,
+				storeId:             data.storeId,
+				reference:           data.reference,
+				currency:            data.currency,
+				clientTransactionId: data.clientTransactionId,
+				backgroundColor:     data.backgroundColor,
+				responseUrl:         data.responseUrl,
 
-			/**
-			 * Called by the Payphone box when the transaction finishes.
-			 *
-			 * @param {Object} result
-			 * @param {string} result.transactionStatus  e.g. 'Approved'
-			 * @param {number} result.transactionId      Payphone transaction ID
-			 * @param {string} result.clientTransactionId Our client ID
-			 */
-			functionResult: function (result) {
-				handleResult(result, data.clientTransactionId);
-			},
-		}).render('pp-button');
+				/**
+				 * Called by the Payphone box when the transaction finishes.
+				 *
+				 * @param {Object} result
+				 * @param {string} result.transactionStatus  e.g. 'Approved'
+				 * @param {number} result.transactionId      Payphone transaction ID
+				 * @param {string} result.clientTransactionId Our client ID
+				 */
+				functionResult: function (result) {
+					handleResult(result, data.clientTransactionId);
+				},
+			}).render('pp-button');
+		} catch ( e ) {
+			ppRendered = false;
+			showBoxError(payphoneParams.errorText);
+		}
 		/* eslint-enable no-new */
 	}
 
